@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-
+import { WebcamRecorder } from "@/components/webcam-recorder";
 import { AnalysisResults } from "@/components/analysis-results";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Brain, Upload, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { WebcamRecorder } from "@/components/webcam-recorder";
 
 interface AnalysisData {
   summary: {

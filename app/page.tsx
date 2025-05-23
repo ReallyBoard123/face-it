@@ -65,17 +65,19 @@ export default function Home() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/test">
+          <Link href="/record">
             <Button size="lg" className="w-full sm:w-auto">
+              <Camera className="mr-2 h-4 w-4" />
+              Start Recording
+            </Button>
+          </Link>
+          
+          <Link href="/test">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto">
               <TestTube className="mr-2 h-4 w-4" />
               Test Backend Connection
             </Button>
           </Link>
-          
-          <Button size="lg" variant="outline" disabled className="w-full sm:w-auto">
-            <Camera className="mr-2 h-4 w-4" />
-            Start Recording (Coming Soon)
-          </Button>
         </div>
 
         {/* Tech Stack */}
@@ -100,7 +102,7 @@ export default function Home() {
               <div>
                 <h4 className="font-medium mb-2">Backend</h4>
                 <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Python with Flask</li>
+                  <li>• Python with FastAPI</li>
                   <li>• py-feat for emotion recognition</li>
                   <li>• OpenCV for video processing</li>
                   <li>• Machine learning models</li>
