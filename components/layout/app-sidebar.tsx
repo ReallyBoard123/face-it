@@ -1,14 +1,31 @@
-import { X } from 'lucide-react';
+'use client';
+
+import * as React from "react";
+import { X, SettingsIcon, SlidersHorizontal } from 'lucide-react'; // Added SlidersHorizontal
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+  useSidebar, // Import useSidebar
+} from "@/components/ui/sidebar";
 
-interface SidebarProps {
-  open: boolean;
-  onClose: () => void;
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   settings: {
     frameSkip: number;
     analysisType: string;
@@ -19,35 +36,37 @@ interface SidebarProps {
   onSettingsChange: (settings: any) => void;
 }
 
-export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarProps) {
+export function AppSidebar({ settings, onSettingsChange, ...props }: AppSidebarProps) {
+  const { openMobile, setOpenMobile, state } = useSidebar(); // Get sidebar state
+
   const updateSetting = (key: string, value: any) => {
     onSettingsChange({ ...settings, [key]: value });
   };
 
-  return (
-    <>
-      {/* Overlay */}
-      {open && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
-          onClick={onClose}
-        />
-      )}
+  // Determine if the main sidebar content or settings should be shown
+  const isSettingsView = state === 'expanded' && openMobile; // Example logic, adjust as needed
 
-      {/* Sidebar */}
-      <div className={cn(
-        "fixed lg:relative z-50 h-full w-72 bg-card border-r transform transition-transform duration-200 ease-in-out",
-        open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-      )}>
+  return (
+    <Sidebar {...props}>
+      <SidebarHeader className="p-0">
+        {/* Header for the main sidebar content - adjust if needed */}
+      </SidebarHeader>
+      <SidebarContent>
+        {/* Conditional rendering based on a toggle or state */}
+        {/* For simplicity, we'll always show settings for now if sidebar is open */}
+        {/* You might want a more sophisticated way to toggle between nav and settings */}
         <div className="flex flex-col h-full">
-          {/* Header */}
+          {/* Settings Header */}
           <div className="p-6 border-b flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Settings</h2>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={onClose}
-              className="lg:hidden"
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Settings</h2>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setOpenMobile(false)} // Close button for mobile
+              className="md:hidden" // Only show on mobile
             >
               <X className="h-4 w-4" />
             </Button>
@@ -82,8 +101,8 @@ export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarPr
             {/* Analysis Type */}
             <div className="space-y-2">
               <Label htmlFor="analysisType">Analysis Type</Label>
-              <Select 
-                value={settings.analysisType} 
+              <Select
+                value={settings.analysisType}
                 onValueChange={(value) => updateSetting('analysisType', value)}
               >
                 <SelectTrigger id="analysisType">
@@ -103,8 +122,8 @@ export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarPr
             {/* Visualization Style */}
             <div className="space-y-2">
               <Label htmlFor="visualizationStyle">Visualization Style</Label>
-              <Select 
-                value={settings.visualizationStyle} 
+              <Select
+                value={settings.visualizationStyle}
                 onValueChange={(value) => updateSetting('visualizationStyle', value)}
               >
                 <SelectTrigger id="visualizationStyle">
@@ -155,8 +174,8 @@ export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarPr
                 {/* Batch Size */}
                 <div className="space-y-2">
                   <Label htmlFor="batchSize">Batch Size</Label>
-                  <Select 
-                    value={settings.batchSize.toString()} 
+                  <Select
+                    value={settings.batchSize.toString()}
                     onValueChange={(value) => updateSetting('batchSize', parseInt(value))}
                   >
                     <SelectTrigger id="batchSize">
@@ -179,8 +198,8 @@ export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarPr
 
           {/* Footer */}
           <div className="p-6 border-t">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full"
               onClick={() => {
                 // Reset to defaults
@@ -197,7 +216,8 @@ export function Sidebar({ open, onClose, settings, onSettingsChange }: SidebarPr
             </Button>
           </div>
         </div>
-      </div>
-    </>
+      </SidebarContent>
+      <SidebarRail />
+    </Sidebar>
   );
 }
