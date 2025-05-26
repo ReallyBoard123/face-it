@@ -2,24 +2,23 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { AppSidebar } from '@/components/layout/app-sidebar'; // Corrected import path
+import { AppSidebar } from '@/components/layout/app-sidebar';
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
 import { VideoRecorder, VideoRecorderHandles } from '@/components/video/video-recorder';
 import { VideoPreview } from '@/components/video/video-preview';
-// Removed unused Breadcrumb imports
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Play, Loader2, AlertTriangle, Video, Gamepad2 } from 'lucide-react';
+import { Play, Loader2, AlertTriangle, Video, Gamepad2, Target } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-
-
+import { StressClickGame } from '../components/games/stress-click-games';
 
 type GameFlowState =
   | "idle"
@@ -30,8 +29,9 @@ type GameFlowState =
   | "analyzing"
   | "results_ready";
 
+type GameType = "flappy_bird" | "stress_click";
+
 const RECORDING_DURATION_SECONDS = 70;
-// const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
 const FLAPPY_BIRD_EMBED_URL = "https://kagarzonl-stress-game.static.hf.space";
 
 export default function Home() {
@@ -42,11 +42,13 @@ export default function Home() {
     detectionThreshold: 0.5,
     batchSize: 4,
   });
+  const [selectedGame, setSelectedGame] = useState<GameType>("stress_click");
   const [flowState, setFlowState] = useState<GameFlowState>("idle");
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
   const [isAnalyzingBackend, setIsAnalyzingBackend] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [gameEvents, setGameEvents] = useState<Array<{ type: string; data: any; timestamp: number }>>([]);
 
   const videoRecorderRef = useRef<VideoRecorderHandles>(null);
   const gameIframeRef = useRef<HTMLIFrameElement>(null);
@@ -78,41 +80,21 @@ export default function Home() {
     }
   }, [flowState, requestWebcamPermissions]);
 
+  const handleGameEvent = useCallback((event: { type: string; data: any; timestamp: number }) => {
+    setGameEvents(prev => [...prev, event]);
+  }, []);
+
   const handleStartGameAndRecording = async () => {
     if (!videoRecorderRef.current) {
       setErrorMessage("Video recorder component is not yet available.");
       return;
     }
 
-    let currentFlowState = flowState; // Use a local variable to track state changes within this function
-
-    if (currentFlowState === "permissions_denied") {
-      const permissionGranted = await requestWebcamPermissions(); // This updates flowState internally
-      // After await, flowState in the component might be updated.
-      // For this function's logic, we need to know if it's now ready.
-      // We assume requestWebcamPermissions updates flowState which we'll check next.
-      // We will re-check the component's flowState after this.
-      // However, to avoid the TS error for the *immediate* subsequent check,
-      // we can proceed if permission was granted.
-      if (!permissionGranted) return; // Exit if permission was not granted in the re-attempt
-      // If it was granted, flowState should now be "ready_to_start"
-      // To ensure the next check uses the updated state, we can read it again,
-      // or structure this to avoid the direct problematic comparison.
-      // The simplest way to ensure the next check is valid after an await that changes state
-      // is to re-fetch the state, but React state updates are asynchronous.
-      // A better pattern:
-      if (!(await videoRecorderRef.current.getStream())) { // Check if stream is available after attempt
-         setErrorMessage("Webcam permissions are required. Please try again.");
-         return;
-      }
-      // If we have a stream, assume we are ready or will become ready.
-      // The component's flowState will be updated by requestWebcamPermissions.
-      // The next general check will handle it.
-      // For now, we let the next check determine if we are in 'ready_to_start'
+    if (flowState === "permissions_denied") {
+      const permissionGranted = await requestWebcamPermissions();
+      if (!permissionGranted) return;
     }
     
-    // General check for readiness, this uses the component's current flowState
-    // This state might have been updated by the requestWebcamPermissions call above.
     if (flowState !== "ready_to_start") {
       if (flowState === "idle" || flowState === "permissions_pending" || flowState === "permissions_denied") {
         setErrorMessage("Please grant webcam permissions to start.");
@@ -125,6 +107,7 @@ export default function Home() {
     setRecordedVideoBlob(null);
     setAnalysisResults(null);
     setErrorMessage(null);
+    setGameEvents([]);
     setGameIframeKey(Date.now());
 
     videoRecorderRef.current?.startRecording()
@@ -148,7 +131,6 @@ export default function Home() {
         setFlowState("ready_to_start");
       });
   };
-
 
   const handleVideoRecordedByRecorder = (blob: Blob) => {
     if(recordingTimerRef.current) clearInterval(recordingTimerRef.current);
@@ -207,9 +189,10 @@ export default function Home() {
     setAnalysisResults(null);
     setIsAnalyzingBackend(false);
     setErrorMessage(null);
+    setGameEvents([]);
     setCountdown(RECORDING_DURATION_SECONDS);
     if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    requestWebcamPermissions(); // This will set flowState to "permissions_pending" then "ready_to_start" or "permissions_denied"
+    requestWebcamPermissions();
   };
 
   return (
@@ -239,6 +222,31 @@ export default function Home() {
                         showControls={false}
                      />
                   </div>
+                  
+                  {/* Game Selection */}
+                  {(flowState === "ready_to_start" || flowState === "idle") && (
+                    <div className="mt-4 w-full max-w-md">
+                      <Tabs value={selectedGame} onValueChange={(value) => setSelectedGame(value as GameType)} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="stress_click" className="flex items-center gap-1">
+                            <Target className="h-4 w-4" />
+                            Stress Click
+                          </TabsTrigger>
+                          <TabsTrigger value="flappy_bird" className="flex items-center gap-1">
+                            <Gamepad2 className="h-4 w-4" />
+                            Flappy Bird
+                          </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="stress_click" className="mt-2 text-center">
+                          <p className="text-sm text-muted-foreground">Click targets as fast as you can!</p>
+                        </TabsContent>
+                        <TabsContent value="flappy_bird" className="mt-2 text-center">
+                          <p className="text-sm text-muted-foreground">Navigate through pipes by clicking!</p>
+                        </TabsContent>
+                      </Tabs>
+                    </div>
+                  )}
+
                   {errorMessage && (
                     <Alert variant="destructive" className="mt-4 w-full">
                       <AlertTriangle className="h-4 w-4" />
@@ -246,20 +254,25 @@ export default function Home() {
                       <AlertDescription>{errorMessage}</AlertDescription>
                     </Alert>
                   )}
+                  
                   {flowState === "permissions_pending" && (
                     <div className="mt-4 text-center">
                       <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
                       <p>Waiting for webcam permission...</p>
                     </div>
                   )}
+                  
                   {flowState === "permissions_denied" && (
                     <Button onClick={requestWebcamPermissions} className="mt-4">Try Granting Permissions Again</Button>
                   )}
+                  
                   {flowState === "ready_to_start" && (
                     <Button onClick={handleStartGameAndRecording} size="lg" className="mt-6 w-full max-w-xs">
-                      <Play className="mr-2 h-5 w-5" /> Start Game & Recording
+                      <Play className="mr-2 h-5 w-5" /> 
+                      Start {selectedGame === 'stress_click' ? 'Stress Click' : 'Flappy Bird'} & Recording
                     </Button>
                   )}
+                  
                   {flowState === "game_active_recording" && (
                      <div className="mt-4 text-center p-3 bg-primary/10 rounded-md w-full">
                         <div className="flex items-center justify-center text-lg font-semibold text-primary mb-1">
@@ -269,6 +282,7 @@ export default function Home() {
                         <p className="text-xs text-muted-foreground">Focus on the game!</p>
                      </div>
                   )}
+                  
                   {(flowState === "analyzing" || flowState === "results_ready" || recordedVideoBlob) && flowState !== "game_active_recording" && (
                      <Button onClick={resetFlow} variant="outline" className="mt-6 w-full max-w-xs">
                         Start New Session
@@ -282,18 +296,36 @@ export default function Home() {
               <div className="md:col-span-2 h-full">
                 <Card className="h-full flex flex-col">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Gamepad2 /> Flappy Bird Challenge</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                      {selectedGame === 'stress_click' ? (
+                        <>
+                          <Target className="h-5 w-5" />
+                          Stress Click Challenge
+                        </>
+                      ) : (
+                        <>
+                          <Gamepad2 className="h-5 w-5" />
+                          Flappy Bird Challenge
+                        </>
+                      )}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="flex-grow flex items-center justify-center p-1 md:p-2">
-                    <iframe
-                      key={gameIframeKey}
-                      ref={gameIframeRef}
-                      src={FLAPPY_BIRD_EMBED_URL}
-                      title="Flappy Bird Game"
-                      className="w-full h-full border-0 rounded-md"
-                      style={{minWidth: '400px', minHeight: '490px'}} // Canvas size
-                      // sandbox="allow-scripts allow-same-origin" // Enable if game allows and for extra security
-                    />
+                    {selectedGame === 'stress_click' ? (
+                      <StressClickGame 
+                        duration={RECORDING_DURATION_SECONDS}
+                        onGameEvent={handleGameEvent}
+                      />
+                    ) : (
+                      <iframe
+                        key={gameIframeKey}
+                        ref={gameIframeRef}
+                        src={FLAPPY_BIRD_EMBED_URL}
+                        title="Flappy Bird Game"
+                        className="w-full h-full border-0 rounded-md"
+                        style={{minWidth: '400px', minHeight: '490px'}}
+                      />
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -311,6 +343,7 @@ export default function Home() {
                     </Card>
                 </div>
             )}
+            
             {flowState === "analyzing" && isAnalyzingBackend && (
                  <div className="col-span-1 md:col-span-3 mt-6 text-center">
                     <Card>
@@ -336,7 +369,8 @@ export default function Home() {
                 <DashboardGrid 
                   settings={settings} 
                   initialResults={analysisResults} 
-                  videoBlob={recordedVideoBlob || undefined} 
+                  videoBlob={recordedVideoBlob || undefined}
+                  gameEvents={gameEvents}
                 />
               </div>
             )}

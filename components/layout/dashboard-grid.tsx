@@ -16,14 +16,17 @@ interface DashboardGridProps {
   };
   initialResults?: any; // Analysis results from parent
   videoBlob?: Blob; // Video blob from parent
+  gameEvents?: Array<{ type: string; data: any; timestamp: number }>; // Game events for timeline markers
 }
 
-export function DashboardGrid({ settings, initialResults, videoBlob: initialVideoBlob }: DashboardGridProps) {
-  // Removed unused recordedVideo state
+export function DashboardGrid({ 
+  settings, 
+  initialResults, 
+  videoBlob: initialVideoBlob,
+  gameEvents = []
+}: DashboardGridProps) {
   const [analysisResults, setAnalysisResults] = useState<any>(initialResults || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  // Note: handleVideoRecorded function removed as it was unused
 
   const analyzeVideo = async (videoBlob: Blob) => {
     setIsAnalyzing(true);
@@ -61,13 +64,13 @@ export function DashboardGrid({ settings, initialResults, videoBlob: initialVide
 
     switch (settings.visualizationStyle) {
       case 'timeline':
-        return <EmotionTimeline data={analysisResults.data} />;
+        return <EmotionTimeline data={analysisResults.data} gameEvents={gameEvents} />;
       case 'heatmap':
         return <AuHeatmap data={analysisResults.data} />;
       case 'distribution':
         return <EmotionDistribution data={analysisResults.data} />;
       default:
-        return <EmotionTimeline data={analysisResults.data} />;
+        return <EmotionTimeline data={analysisResults.data} gameEvents={gameEvents} />;
     }
   };
 
@@ -93,7 +96,8 @@ export function DashboardGrid({ settings, initialResults, videoBlob: initialVide
         name: dominantEmotion[0],
         value: (dominantEmotion[1] as any).mean * 100
       } : null,
-      activityLevel: Math.min(100, totalActivity * 100)
+      activityLevel: Math.min(100, totalActivity * 100),
+      gameEventCount: gameEvents.length
     };
   };
 
@@ -149,8 +153,8 @@ export function DashboardGrid({ settings, initialResults, videoBlob: initialVide
               <div className="flex items-center space-x-2">
                 <Activity className="h-8 w-8 text-orange-500" />
                 <div>
-                  <p className="text-2xl font-bold">{metrics.activityLevel.toFixed(0)}%</p>
-                  <p className="text-xs text-muted-foreground">Activity Level</p>
+                  <p className="text-2xl font-bold">{metrics.gameEventCount}</p>
+                  <p className="text-xs text-muted-foreground">Game Events</p>
                 </div>
               </div>
             </CardContent>
@@ -166,6 +170,11 @@ export function DashboardGrid({ settings, initialResults, videoBlob: initialVide
               {settings.visualizationStyle === 'timeline' && 'Emotion Timeline'}
               {settings.visualizationStyle === 'heatmap' && 'Action Unit Heatmap'}
               {settings.visualizationStyle === 'distribution' && 'Emotion Distribution'}
+              {gameEvents.length > 0 && settings.visualizationStyle === 'timeline' && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">
+                  with game events
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
