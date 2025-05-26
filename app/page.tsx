@@ -26,6 +26,8 @@ import {
 import { Menu, Play, Loader2, Info, AlertTriangle, Video, Gamepad2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+
+
 type GameFlowState =
   | "idle"
   | "permissions_pending"

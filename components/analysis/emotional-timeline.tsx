@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Card } from '@/components/ui/card';
+import { useMemo } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 
 interface EmotionTimelineProps {
@@ -8,7 +8,7 @@ interface EmotionTimelineProps {
 
 const emotionColors: Record<string, string> = {
   anger: '#ef4444',
-  disgust: '#f97316',
+  disgust: '#f97316', 
   fear: '#a855f7',
   happiness: '#22c55e',
   sadness: '#3b82f6',
@@ -17,138 +17,39 @@ const emotionColors: Record<string, string> = {
 };
 
 export function EmotionTimeline({ data }: EmotionTimelineProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current || !containerRef.current || !data?.summary?.emotions?.timeline) {
-      return;
+  const chartData = useMemo(() => {
+    if (!data?.summary?.emotions?.timeline) {
+      return [];
     }
-
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Set canvas size
-    const rect = containerRef.current.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
 
     const timeline = data.summary.emotions.timeline;
-    const timestamps = timeline.timestamps;
-    const emotions = Object.keys(timeline).filter(key => key !== 'timestamps');
-
-    if (!timestamps || timestamps.length === 0) return;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Drawing parameters
-    const padding = 40;
-    const graphWidth = canvas.width - padding * 2;
-    const graphHeight = canvas.height - padding * 2;
-    const xStep = graphWidth / (timestamps.length - 1);
-
-    // Draw grid
-    ctx.strokeStyle = '#e5e7eb';
-    ctx.lineWidth = 1;
-
-    // Horizontal grid lines
-    for (let i = 0; i <= 5; i++) {
-      const y = padding + (graphHeight * i) / 5;
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(canvas.width - padding, y);
-      ctx.stroke();
-
-      // Y-axis labels
-      ctx.fillStyle = '#6b7280';
-      ctx.font = '12px sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(`${(1 - i / 5).toFixed(1)}`, padding - 10, y + 4);
-    }
-
-    // Draw emotion lines
-    emotions.forEach((emotion, emotionIndex) => {
-      const values = timeline[emotion];
-      if (!values || values.length === 0) return;
-
-      const color = emotionColors[emotion] || '#000';
+    const timestamps = timeline.timestamps || [];
+    
+    // Transform the data into the format Recharts expects
+    return timestamps.map((timestamp: number, index: number) => {
+      const dataPoint: any = {
+        time: `${timestamp}s`,
+        timeValue: timestamp
+      };
       
-      // Draw line
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      values.forEach((value: number, i: number) => {
-        const x = padding + i * xStep;
-        const y = padding + graphHeight * (1 - value);
-
-        if (i === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
+      // Add each emotion value for this timestamp
+      Object.keys(timeline).forEach(key => {
+        if (key !== 'timestamps' && timeline[key] && timeline[key][index] !== undefined) {
+          dataPoint[key] = timeline[key][index];
         }
       });
-
-      ctx.stroke();
-
-      // Add glow effect for higher values
-      ctx.globalAlpha = 0.1;
-      ctx.lineWidth = 8;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = 2;
-
-      // Draw label at the end
-      const lastValue = values[values.length - 1];
-      const lastX = padding + (values.length - 1) * xStep;
-      const lastY = padding + graphHeight * (1 - lastValue);
-
-      ctx.fillStyle = color;
-      ctx.font = 'bold 12px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(emotion, lastX + 10, lastY + 4);
+      
+      return dataPoint;
     });
-
-    // Draw axes
-    ctx.strokeStyle = '#374151';
-    ctx.lineWidth = 2;
-    
-    // Y-axis
-    ctx.beginPath();
-    ctx.moveTo(padding, padding);
-    ctx.lineTo(padding, canvas.height - padding);
-    ctx.stroke();
-
-    // X-axis
-    ctx.beginPath();
-    ctx.moveTo(padding, canvas.height - padding);
-    ctx.lineTo(canvas.width - padding, canvas.height - padding);
-    ctx.stroke();
-
-    // X-axis labels (time)
-    const timeStep = Math.max(1, Math.floor(timestamps.length / 10));
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '12px sans-serif';
-    ctx.textAlign = 'center';
-    
-    for (let i = 0; i < timestamps.length; i += timeStep) {
-      const x = padding + i * xStep;
-      const time = (i * 30 / 30).toFixed(0); // Assuming 30fps with 30 frame skip = 1 second
-      ctx.fillText(`${time}s`, x, canvas.height - padding + 20);
-    }
-
-    // Title
-    ctx.fillStyle = '#111827';
-    ctx.font = 'bold 16px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Emotion Intensity Over Time', canvas.width / 2, 20);
-
   }, [data]);
 
-  // Find peak emotions
-  const getPeakEmotions = () => {
+  const emotions = useMemo(() => {
+    if (!data?.summary?.emotions?.timeline) return [];
+    
+    return Object.keys(data.summary.emotions.timeline).filter(key => key !== 'timestamps');
+  }, [data]);
+
+  const peakEmotions = useMemo(() => {
     if (!data?.summary?.emotions?.statistics) return [];
     
     const stats = data.summary.emotions.statistics;
@@ -160,23 +61,77 @@ export function EmotionTimeline({ data }: EmotionTimelineProps) {
       }))
       .sort((a, b) => b.maxValue - a.maxValue)
       .slice(0, 3);
+  }, [data]);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border rounded-lg p-3 shadow-lg">
+          <p className="font-medium">{`Time: ${label}`}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }}>
+              {`${entry.dataKey}: ${(entry.value * 100).toFixed(1)}%`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
   };
 
-  const peakEmotions = getPeakEmotions();
+  if (!chartData.length) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <p className="text-muted-foreground">No emotion timeline data available</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full flex flex-col gap-4">
-      {/* Canvas */}
-      <div ref={containerRef} className="flex-1 relative">
-        <canvas 
-          ref={canvasRef}
-          className="w-full h-full"
-        />
+    <div className="h-full flex flex-col">
+      {/* Chart */}
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+            <XAxis 
+              dataKey="timeValue"
+              type="number"
+              scale="linear"
+              domain={['dataMin', 'dataMax']}
+              tickFormatter={(value) => `${value}s`}
+              className="text-xs"
+            />
+            <YAxis 
+              domain={[0, 1]}
+              tickFormatter={(value: number) => `${(value * 100).toFixed(0)}%`}
+              className="text-xs"
+            />
+            <Tooltip content={<CustomTooltip />} />
+            <Legend 
+              wrapperStyle={{ paddingTop: '10px' }}
+              iconType="line"
+            />
+            
+            {emotions.map((emotion) => (
+              <Line
+                key={emotion}
+                type="monotone"
+                dataKey={emotion}
+                stroke={emotionColors[emotion] || '#6b7280'}
+                strokeWidth={2}
+                dot={false}
+                name={emotion.charAt(0).toUpperCase() + emotion.slice(1)}
+                connectNulls={false}
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Peak emotions badges */}
       {peakEmotions.length > 0 && (
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center mt-4 pt-4 border-t">
           <span className="text-sm text-muted-foreground">Peak emotions:</span>
           {peakEmotions.map(({ emotion, maxValue }) => (
             <Badge 

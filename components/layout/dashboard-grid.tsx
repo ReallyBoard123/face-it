@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { VideoRecorder } from '@/components/video/video-recorder';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmotionTimeline } from '../analysis/emotional-timeline';
 import { AuHeatmap } from '../analysis/au-heatmap';

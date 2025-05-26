@@ -15,6 +15,8 @@ from enum import Enum
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import hashlib
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -62,7 +64,9 @@ class AnalysisConfig:
 # Global variables
 detector = None
 executor = ThreadPoolExecutor(max_workers=2)
-analysis_cache = {}  # Simple in-memory cache
+analysis_cache = {}  # Simple in-memory cache with TTL
+cache_timestamps = {}  # Track when cache entries were created
+CACHE_TTL_SECONDS = 300  # 5 minutes TTL for cache entries
 
 def get_detector():
     """Lazy load the detector"""
@@ -77,6 +81,32 @@ def get_detector():
             logger.error(f"Failed to initialize detector: {e}")
             raise
     return detector
+
+def generate_cache_key(file_content: bytes, config: AnalysisConfig, filename: str) -> str:
+    """Generate a unique cache key based on file content and config"""
+    # Create hash of first 1KB of file content + config for uniqueness
+    content_sample = file_content[:1024] if len(file_content) > 1024 else file_content
+    content_hash = hashlib.md5(content_sample).hexdigest()[:8]
+    
+    config_str = f"{config.frame_skip}_{config.analysis_type}_{config.detection_threshold}"
+    timestamp = str(int(time.time() // 60))  # Change every minute to prevent too much caching
+    
+    return f"{content_hash}_{config_str}_{timestamp}"
+
+def clean_expired_cache():
+    """Remove expired cache entries"""
+    current_time = time.time()
+    expired_keys = [
+        key for key, timestamp in cache_timestamps.items()
+        if current_time - timestamp > CACHE_TTL_SECONDS
+    ]
+    
+    for key in expired_keys:
+        analysis_cache.pop(key, None)
+        cache_timestamps.pop(key, None)
+    
+    if expired_keys:
+        logger.info(f"Cleaned {len(expired_keys)} expired cache entries")
 
 def convert_video_sync(input_path: str, output_path: str) -> bool:
     """Synchronous video conversion using ffmpeg via OpenCV"""
@@ -275,6 +305,9 @@ async def analyze_video(
     settings: Optional[str] = Form(None)
 ):
     """Advanced video analysis endpoint"""
+    # Clean expired cache entries first
+    clean_expired_cache()
+    
     # Parse settings
     config = AnalysisConfig()
     if settings:
@@ -288,13 +321,20 @@ async def analyze_video(
         except json.JSONDecodeError:
             logger.warning("Failed to parse settings, using defaults")
     
-    # Generate cache key
-    cache_key = f"{file.filename}_{config.frame_skip}_{config.analysis_type}"
+    # Read file content for cache key generation
+    file_content = await file.read()
+    cache_key = generate_cache_key(file_content, config, file.filename)
     
     # Check cache
-    if cache_key in analysis_cache:
-        logger.info(f"Returning cached results for {cache_key}")
-        return JSONResponse(content=analysis_cache[cache_key])
+    current_time = time.time()
+    if cache_key in analysis_cache and cache_key in cache_timestamps:
+        if current_time - cache_timestamps[cache_key] < CACHE_TTL_SECONDS:
+            logger.info(f"Returning cached results for {cache_key}")
+            return JSONResponse(content=analysis_cache[cache_key])
+        else:
+            # Remove expired entry
+            analysis_cache.pop(cache_key, None)
+            cache_timestamps.pop(cache_key, None)
     
     tmp_input = None
     tmp_output = None
@@ -302,11 +342,10 @@ async def analyze_video(
     try:
         # Save uploaded file
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as tmp:
-            content = await file.read()
-            tmp.write(content)
+            tmp.write(file_content)
             tmp_input = tmp.name
         
-        logger.info(f"Processing video: {file.filename} ({len(content) / 1024 / 1024:.2f} MB)")
+        logger.info(f"Processing video: {file.filename} ({len(file_content) / 1024 / 1024:.2f} MB)")
         
         # For webm files, try to convert to mp4 for better compatibility
         video_path = tmp_input
@@ -322,7 +361,7 @@ async def analyze_video(
                 logger.warning("Video conversion failed, trying original webm file")
                 video_path = tmp_input
         
-        logger.info(f"Starting analysis with config: {config}")
+        logger.info(f"Starting fresh analysis with config: {config}")
         
         # Run detection in executor to avoid async issues
         results = await asyncio.get_event_loop().run_in_executor(
@@ -349,15 +388,20 @@ async def analyze_video(
                     "filename": file.filename,
                     "processed_at": datetime.now().isoformat(),
                     "detector_version": "py-feat",
-                    "frames_processed": len(results)
+                    "frames_processed": len(results),
+                    "cache_key": cache_key[:8]  # First 8 chars for debugging
                 }
             },
             "timestamp": datetime.now().isoformat()
         }
         
         # Cache results (with size limit)
-        if len(analysis_cache) < 10:  # Simple cache size limit
+        if len(analysis_cache) < 20:  # Increased cache size limit
             analysis_cache[cache_key] = response
+            cache_timestamps[cache_key] = current_time
+            logger.info(f"Cached results with key: {cache_key[:8]}...")
+        else:
+            logger.warning("Cache full, not caching this result")
         
         return JSONResponse(content=response)
         
@@ -389,18 +433,24 @@ async def health_check():
     except:
         detector_ready = False
     
+    clean_expired_cache()
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "detector_ready": detector_ready,
-        "cache_size": len(analysis_cache)
+        "cache_size": len(analysis_cache),
+        "cache_entries": list(analysis_cache.keys())[:5] if analysis_cache else []  # Show first 5 cache keys
     }
 
 @app.post("/clear-cache")
 async def clear_cache():
     """Clear analysis cache"""
+    cache_size = len(analysis_cache)
     analysis_cache.clear()
-    return {"status": "success", "message": "Cache cleared"}
+    cache_timestamps.clear()
+    logger.info(f"Cache cleared: {cache_size} entries removed")
+    return {"status": "success", "message": f"Cache cleared ({cache_size} entries removed)"}
 
 @app.get("/")
 async def root():
@@ -419,6 +469,11 @@ async def root():
                 "method": "GET",
                 "description": "Check API health status"
             },
+            "clear_cache": {
+                "path": "/clear-cache",
+                "method": "POST",
+                "description": "Clear analysis cache"
+            },
             "docs": {
                 "path": "/docs",
                 "description": "Interactive API documentation"
@@ -430,7 +485,8 @@ async def root():
             "Facial landmark tracking",
             "Timeline visualization",
             "Peak moment detection",
-            "Result caching"
+            "Smart result caching with TTL",
+            "Automatic cache expiration"
         ]
     }
 
