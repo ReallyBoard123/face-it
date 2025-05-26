@@ -35,16 +35,16 @@ type GameFlowState =
   | "analyzing"
   | "results_ready";
 
-const RECORDING_DURATION_SECONDS = 40;
+const RECORDING_DURATION_SECONDS = 30;
 const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
 
 export default function Home() {
   const [settings, setSettings] = useState({
     frameSkip: 30,
-    analysisType: 'combined',
+    analysisType: 'emotions',
     visualizationStyle: 'timeline',
     detectionThreshold: 0.5,
-    batchSize: 1,
+    batchSize: 4,
   });
   const [flowState, setFlowState] = useState<GameFlowState>("idle");
   const [recordedVideoBlob, setRecordedVideoBlob] = useState<Blob | null>(null);
