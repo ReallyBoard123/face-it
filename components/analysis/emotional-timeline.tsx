@@ -108,7 +108,7 @@ export function EmotionTimeline({ data, gameEvents = [] }: EmotionTimelineProps)
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const timeValue = parseFloat(label.replace('s', ''));
+      const timeValue = parseFloat(String(label).replace('s', ''));
       const eventsAtTime = eventMarkers.find(m => Math.abs(m.timestamp - timeValue) < 1)?.events || [];
       
       return (

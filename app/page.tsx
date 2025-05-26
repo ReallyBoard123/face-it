@@ -31,8 +31,8 @@ type GameFlowState =
 
 type GameType = "flappy_bird" | "stress_click";
 
-const RECORDING_DURATION_SECONDS = 70;
-const FLAPPY_BIRD_EMBED_URL = "https://kagarzonl-stress-game.static.hf.space";
+const RECORDING_DURATION_SECONDS = 30;
+const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
 
 export default function Home() {
   const [settings, setSettings] = useState({
