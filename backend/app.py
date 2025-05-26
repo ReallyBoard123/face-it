@@ -49,8 +49,6 @@ class VisualizationStyle(str, Enum):
     TIMELINE = "timeline"
     HEATMAP = "heatmap"
     DISTRIBUTION = "distribution"
-    PEAKS = "peaks"
-    COMPARISON = "comparison"
 
 # Configuration dataclass
 @dataclass

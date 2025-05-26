@@ -19,15 +19,11 @@ interface DashboardGridProps {
 }
 
 export function DashboardGrid({ settings, initialResults, videoBlob: initialVideoBlob }: DashboardGridProps) {
-  const [recordedVideo, setRecordedVideo] = useState<Blob | null>(initialVideoBlob || null);
+  // Removed unused recordedVideo state
   const [analysisResults, setAnalysisResults] = useState<any>(initialResults || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const handleVideoRecorded = (blob: Blob) => {
-    setRecordedVideo(blob);
-    // Automatically start analysis
-    analyzeVideo(blob);
-  };
+  // Note: handleVideoRecorded function removed as it was unused
 
   const analyzeVideo = async (videoBlob: Blob) => {
     setIsAnalyzing(true);

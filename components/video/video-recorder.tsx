@@ -3,9 +3,8 @@
 
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { Camera, Upload, Square, Circle, Video as VideoIcon } from 'lucide-react'; // Assuming Video is an icon
+import { Square, Circle, Video as VideoIcon } from 'lucide-react'; // Removed unused icons
 import { Button } from '../ui/button'; // Assuming you have this
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs'; // Assuming you have these
 
 // Define props
 interface VideoRecorderProps {
@@ -34,7 +33,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
     onRecordingStopped,
     showControls = true, // Default to showing controls
   }, ref) => {
-    const [mode, setMode] = useState<'record' | 'upload'>('record');
+    // Removed unused upload mode
     const [isRecordingInternal, setIsRecordingInternal] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [stream, setStream] = useState<MediaStream | null>(null);
@@ -195,27 +194,17 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
 
         {showControls && (
           <>
-            <Tabs value={mode} onValueChange={(v) => setMode(v as 'record' | 'upload')} className="mt-4">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="record" disabled={isRecordingInternal || isAnalyzing}>Record</TabsTrigger>
-                <TabsTrigger value="upload" disabled={isRecordingInternal || isAnalyzing}>Upload</TabsTrigger>
-              </TabsList>
-              <TabsContent value="record" className="mt-4">
-                <Button
-                  onClick={isRecordingInternal ? stopManualRecording : startManualRecording}
-                  variant={isRecordingInternal ? "destructive" : "default"}
-                  className="w-full"
-                  disabled={isAnalyzing || (!stream && !isRecordingInternal)}
-                >
-                  {isRecordingInternal ? <Square className="mr-2 h-4 w-4" /> : <Circle className="mr-2 h-4 w-4" />}
-                  {isRecordingInternal ? 'Stop Recording' : 'Start Recording'}
-                </Button>
-              </TabsContent>
-              <TabsContent value="upload" className="mt-4 text-center">
-                <p className="text-sm text-muted-foreground">Upload functionality to be added here.</p>
-                {/* Input for file upload can be added here */}
-              </TabsContent>
-            </Tabs>
+            <div className="mt-4">
+              <Button
+                onClick={isRecordingInternal ? stopManualRecording : startManualRecording}
+                variant={isRecordingInternal ? "destructive" : "default"}
+                className="w-full"
+                disabled={isAnalyzing || (!stream && !isRecordingInternal)}
+              >
+                {isRecordingInternal ? <Square className="mr-2 h-4 w-4" /> : <Circle className="mr-2 h-4 w-4" />}
+                {isRecordingInternal ? 'Stop Recording' : 'Start Recording'}
+              </Button>
+            </div>
             {isAnalyzing && (
               <div className="mt-2 space-y-1">
                 <p className="text-sm text-center">Analyzing video...</p>

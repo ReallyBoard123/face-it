@@ -133,8 +133,6 @@ export function AppSidebar({ settings, onSettingsChange, ...props }: AppSidebarP
                   <SelectItem value="timeline">Timeline</SelectItem>
                   <SelectItem value="heatmap">Heatmap</SelectItem>
                   <SelectItem value="distribution">Distribution</SelectItem>
-                  <SelectItem value="peaks">Peak Moments</SelectItem>
-                  <SelectItem value="comparison">Comparison</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -6,14 +6,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar'; // Corrected impor
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
 import { VideoRecorder, VideoRecorderHandles } from '@/components/video/video-recorder';
 import { VideoPreview } from '@/components/video/video-preview';
-import {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbSeparator,
-  BreadcrumbPage
-} from '@/components/ui/breadcrumb'; // Corrected import path
+// Removed unused Breadcrumb imports
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Separator } from "@/components/ui/separator";
@@ -23,7 +16,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Menu, Play, Loader2, Info, AlertTriangle, Video, Gamepad2 } from 'lucide-react';
+import { Play, Loader2, AlertTriangle, Video, Gamepad2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 
@@ -37,8 +30,9 @@ type GameFlowState =
   | "analyzing"
   | "results_ready";
 
-const RECORDING_DURATION_SECONDS = 30;
-const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
+const RECORDING_DURATION_SECONDS = 70;
+// const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
+const FLAPPY_BIRD_EMBED_URL = "https://kagarzonl-stress-game.static.hf.space";
 
 export default function Home() {
   const [settings, setSettings] = useState({
@@ -200,19 +194,10 @@ export default function Home() {
       <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3">
         {!isGameActive && <SidebarTrigger />}
         <Separator orientation="vertical" className={`mr-2 h-4 ${isGameActive ? 'hidden' : 'hidden md:flex'}`} />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="#">FaceIt Game Analysis</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage className="capitalize">
-                {flowState.replace(/_/g, ' ')}
-              </BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="text-2xl font-bold">FaceIt Game Analysis</div>
+        <div className="text-sm text-muted-foreground capitalize">
+          {flowState.replace(/_/g, ' ')}
+        </div>
       </header>
     );
   };
