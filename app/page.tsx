@@ -1,145 +1,51 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, Camera, Monitor, TestTube } from "lucide-react";
+'use client';
+
+import { useState } from 'react';
+import { DashboardGrid } from '@/components/layout/dashboard-grid';
+import { Sidebar } from '@/components/layout/sidebar';
+import { Button } from '@/components/ui/button';
+import { Menu } from 'lucide-react';
 
 export default function Home() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settings, setSettings] = useState({
+    frameSkip: 30,
+    analysisType: 'combined',
+    visualizationStyle: 'timeline',
+    detectionThreshold: 0.5,
+    batchSize: 1,
+  });
+
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="space-y-8">
+    <div className="flex h-screen bg-background">
+      {/* Sidebar */}
+      <Sidebar 
+        open={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)}
+        settings={settings}
+        onSettingsChange={setSettings}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Facial Expression Analysis Tool
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Record facial expressions while viewing content and analyze emotional responses 
-            with AI-powered recognition using py-feat
-          </p>
-        </div>
-
-        {/* Features Grid */}
-        <div className="grid gap-6 md:grid-cols-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="h-5 w-5" />
-                Webcam Recording
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Capture facial expressions in real-time while you interact with content
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Monitor className="h-5 w-5" />
-                Screen Capture
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Simultaneously record screen activity to correlate with facial responses
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="h-5 w-5" />
-                AI Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription>
-                Advanced emotion recognition powered by py-feat machine learning models
-              </CardDescription>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href="/record">
-            <Button size="lg" className="w-full sm:w-auto">
-              <Camera className="mr-2 h-4 w-4" />
-              Start Recording
+        <header className="border-b px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              <Menu className="h-5 w-5" />
             </Button>
-          </Link>
-          
-          <Link href="/test">
-            <Button size="lg" variant="outline" className="w-full sm:w-auto">
-              <TestTube className="mr-2 h-4 w-4" />
-              Test Backend Connection
-            </Button>
-          </Link>
-        </div>
+            <h1 className="text-2xl font-bold">Facial Expression Analysis</h1>
+          </div>
+        </header>
 
-        {/* Tech Stack */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Technology Stack</CardTitle>
-            <CardDescription>
-              Modern, fast, and reliable architecture
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <h4 className="font-medium mb-2">Frontend</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Next.js 15 with App Router</li>
-                  <li>• TypeScript for type safety</li>
-                  <li>• Tailwind CSS for styling</li>
-                  <li>• Shadcn/ui component library</li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="font-medium mb-2">Backend</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• Python with FastAPI</li>
-                  <li>• py-feat for emotion recognition</li>
-                  <li>• OpenCV for video processing</li>
-                  <li>• Machine learning models</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Instructions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Getting Started</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">1. Start the Backend Server</h4>
-                <pre className="bg-muted p-2 rounded text-sm">
-                </pre>
-              </div>
-              
-              <div>
-                <h4 className="font-medium mb-2">2. Start the Frontend Server</h4>
-                <pre className="bg-muted p-2 rounded text-sm">
-                </pre>
-              </div>
-              
-              <div>
-                <h4 className="font-medium mb-2">3. Test the Connection</h4>
-                <p className="text-sm text-muted-foreground">
-                  Click the "Test Backend Connection" button above to verify everything is working.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Dashboard Content */}
+        <main className="flex-1 overflow-auto p-6">
+          <DashboardGrid settings={settings} />
+        </main>
       </div>
     </div>
   );
