@@ -95,8 +95,6 @@ export default function Home() {
       // After await, flowState in the component might be updated.
       // For this function's logic, we need to know if it's now ready.
       // We assume requestWebcamPermissions updates flowState which we'll check next.
-      // To be absolutely sure for *this function's execution*, we'd ideally get a return value.
-      // Let's rely on the fact that `requestWebcamPermissions` sets the state.
       // We will re-check the component's flowState after this.
       // However, to avoid the TS error for the *immediate* subsequent check,
       // we can proceed if permission was granted.
@@ -348,22 +346,11 @@ export default function Home() {
 
             {flowState === "results_ready" && analysisResults && (
               <div className="col-span-1 md:col-span-3 mt-6">
-                {/*
-                  TODO: Modify DashboardGrid to accept analysisResults and recordedVideoBlob as props
-                  Example: <DashboardGrid settings={settings} initialResults={analysisResults} videoBlob={recordedVideoBlob} />
-                */}
-                <DashboardGrid settings={settings} />
-                <div className="mt-6 text-center">
-                    <Card>
-                        <CardHeader><CardTitle>Analysis Data</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-sm text-muted-foreground mb-2">Raw analysis JSON output:</p>
-                            <pre className="bg-muted p-4 rounded-md text-left text-xs overflow-auto max-h-96">
-                                {JSON.stringify(analysisResults, null, 2)}
-                            </pre>
-                        </CardContent>
-                    </Card>
-                </div>
+                <DashboardGrid 
+                  settings={settings} 
+                  initialResults={analysisResults} 
+                  videoBlob={recordedVideoBlob || undefined} 
+                />
               </div>
             )}
           </div>

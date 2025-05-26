@@ -78,42 +78,96 @@ def get_detector():
             raise
     return detector
 
-async def convert_video(input_path: str, output_path: str) -> bool:
-    """Convert video asynchronously"""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        executor, 
-        _convert_video_sync, 
-        input_path, 
-        output_path
-    )
-
-def _convert_video_sync(input_path: str, output_path: str) -> bool:
-    """Synchronous video conversion using OpenCV"""
+def convert_video_sync(input_path: str, output_path: str) -> bool:
+    """Synchronous video conversion using ffmpeg via OpenCV"""
     try:
+        # First try to read the video directly
         cap = cv2.VideoCapture(input_path)
         if not cap.isOpened():
+            logger.error(f"Cannot open video file: {input_path}")
             return False
         
+        # Get video properties
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
+        logger.info(f"Video info: {width}x{height}, {fps} fps, {frame_count} frames")
+        
+        # If fps is 0 or invalid, set a default
+        if fps <= 0:
+            fps = 30
+            logger.warning(f"Invalid fps detected, using default: {fps}")
+        
+        # Use a more compatible codec
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
+        if not out.isOpened():
+            logger.error("Cannot create output video writer")
+            cap.release()
+            return False
+        
+        frame_num = 0
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             out.write(frame)
+            frame_num += 1
         
         cap.release()
         out.release()
+        
+        logger.info(f"Video conversion completed: {frame_num} frames processed")
         return True
+        
     except Exception as e:
         logger.error(f"Video conversion error: {e}")
         return False
+
+async def convert_video(input_path: str, output_path: str) -> bool:
+    """Convert video asynchronously"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        executor, 
+        convert_video_sync, 
+        input_path, 
+        output_path
+    )
+
+def run_detector_sync(video_path: str, config: AnalysisConfig) -> pd.DataFrame:
+    """Run detector synchronously to avoid async issues"""
+    detector = get_detector()
+    
+    # Prepare detection parameters according to py-feat documentation
+    detect_params = {
+        "data_type": "video",
+        "skip_frames": config.frame_skip,
+        "face_detection_threshold": config.detection_threshold,
+        # Note: batch_size is NOT a parameter for detector.detect() according to docs
+        "progress_bar": True
+    }
+    
+    logger.info(f"Running detector with params: {detect_params}")
+    
+    try:
+        # Run the actual detection
+        results = detector.detect(video_path, **detect_params)
+        
+        if results is None:
+            raise Exception("Detector returned None - no faces detected")
+        
+        if hasattr(results, 'empty') and results.empty:
+            raise Exception("Detector returned empty DataFrame - no faces detected")
+        
+        logger.info(f"Detection completed successfully: {len(results)} frames processed")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Detector error: {e}")
+        raise
 
 def analyze_emotions(results: pd.DataFrame) -> Dict[str, Any]:
     """Extract emotion analysis from results"""
@@ -130,7 +184,7 @@ def analyze_emotions(results: pd.DataFrame) -> Dict[str, Any]:
         if len(values) > 0:
             emotion_stats[emotion] = {
                 "mean": float(values.mean()),
-                "std": float(values.std()),
+                "std": float(values.std()) if len(values) > 1 else 0.0,
                 "min": float(values.min()),
                 "max": float(values.max()),
                 "peaks": find_peaks(values.values),
@@ -148,7 +202,7 @@ def analyze_emotions(results: pd.DataFrame) -> Dict[str, Any]:
 
 def analyze_action_units(results: pd.DataFrame) -> Dict[str, Any]:
     """Extract AU analysis from results"""
-    au_cols = [col for col in results.columns if col.startswith('AU') and col[2:].isdigit()]
+    au_cols = [col for col in results.columns if col.startswith('AU') and col[2:].replace('_', '').isdigit()]
     
     if not au_cols:
         return {}
@@ -164,18 +218,16 @@ def analyze_action_units(results: pd.DataFrame) -> Dict[str, Any]:
                 "max_intensity": float(values.max()),
             }
     
-    # AU co-activation patterns
-    au_data = results[au_cols].fillna(0)
-    co_activation = au_data.corr().to_dict()
-    
     return {
         "statistics": au_stats,
-        "co_activation": co_activation,
         "timeline": prepare_timeline_data(results, au_cols)
     }
 
 def find_peaks(values: np.ndarray, threshold: float = 0.7) -> List[int]:
     """Find peak moments in the data"""
+    if len(values) < 3:
+        return []
+    
     peaks = []
     for i in range(1, len(values) - 1):
         if values[i] > threshold and values[i] > values[i-1] and values[i] > values[i+1]:
@@ -191,7 +243,8 @@ def prepare_timeline_data(results: pd.DataFrame, columns: List[str], max_frames:
     
     timeline = {"timestamps": list(range(len(results)))}
     for col in columns:
-        timeline[col] = results[col].fillna(0).tolist()
+        if col in results.columns:
+            timeline[col] = results[col].fillna(0).tolist()
     
     return timeline
 
@@ -235,9 +288,6 @@ async def analyze_video(
         except json.JSONDecodeError:
             logger.warning("Failed to parse settings, using defaults")
     
-    # Get detector
-    detector = get_detector()
-    
     # Generate cache key
     cache_key = f"{file.filename}_{config.frame_skip}_{config.analysis_type}"
     
@@ -258,40 +308,32 @@ async def analyze_video(
         
         logger.info(f"Processing video: {file.filename} ({len(content) / 1024 / 1024:.2f} MB)")
         
-        # Convert if needed
-        if file.content_type == 'video/webm':
+        # For webm files, try to convert to mp4 for better compatibility
+        video_path = tmp_input
+        if file.content_type == 'video/webm' or file.filename.endswith('.webm'):
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as tmp:
                 tmp_output = tmp.name
             
-            if not await convert_video(tmp_input, tmp_output):
-                raise Exception("Video conversion failed")
-            
-            video_path = tmp_output
-        else:
-            video_path = tmp_input
+            logger.info("Converting webm to mp4...")
+            if await convert_video(tmp_input, tmp_output):
+                video_path = tmp_output
+                logger.info("Video conversion successful")
+            else:
+                logger.warning("Video conversion failed, trying original webm file")
+                video_path = tmp_input
         
-        # Run analysis
         logger.info(f"Starting analysis with config: {config}")
         
-        # Adjust parameters based on config
-        detect_params = {
-            "skip_frames": config.frame_skip,
-            "face_detection_threshold": config.detection_threshold,
-            "batch_size": config.batch_size
-        }
-        
-        # Run detection
+        # Run detection in executor to avoid async issues
         results = await asyncio.get_event_loop().run_in_executor(
             executor,
-            lambda: detector.detect(
-                video_path,
-                data_type="video",
-                **detect_params
-            )
+            run_detector_sync,
+            video_path,
+            config
         )
         
         if results is None or (hasattr(results, 'empty') and results.empty):
-            raise Exception("No faces detected in video")
+            raise Exception("No faces detected in video. Try adjusting detection threshold or ensuring good lighting.")
         
         # Calculate comprehensive metrics
         summary = calculate_summary_metrics(results, config)
@@ -299,14 +341,15 @@ async def analyze_video(
         # Prepare response
         response = {
             "status": "success",
-            "message": f"Analysis completed successfully",
+            "message": f"Analysis completed successfully. Processed {len(results)} frames.",
             "data": {
                 "summary": summary,
                 "visualization_type": config.visualization_style,
                 "metadata": {
                     "filename": file.filename,
                     "processed_at": datetime.now().isoformat(),
-                    "detector_version": "py-feat"
+                    "detector_version": "py-feat",
+                    "frames_processed": len(results)
                 }
             },
             "timestamp": datetime.now().isoformat()
@@ -334,16 +377,22 @@ async def analyze_video(
             if path and os.path.exists(path):
                 try:
                     os.unlink(path)
-                except:
-                    pass
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to cleanup {path}: {cleanup_error}")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    try:
+        detector = get_detector()
+        detector_ready = detector is not None
+    except:
+        detector_ready = False
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "detector_ready": detector is not None,
+        "detector_ready": detector_ready,
         "cache_size": len(analysis_cache)
     }
 

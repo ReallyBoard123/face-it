@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { VideoRecorder } from '@/components/video/video-recorder';
-
-import { Card } from '@/components/ui/card';
-import { AnalysisSummary } from '../analysis/analysis-summary';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmotionTimeline } from '../analysis/emotional-timeline';
 import { AuHeatmap } from '../analysis/au-heatmap';
 import { EmotionDistribution } from '../analysis/emotion-distribution';
-import { EmotionTimeline } from '../analysis/emotional-timeline';
-import { VideoPreview } from '../video/video-preview';
+import { Progress } from '@/components/ui/progress';
+import { Activity, TrendingUp, Users, Clock } from 'lucide-react';
 
 interface DashboardGridProps {
   settings: {
@@ -16,11 +15,13 @@ interface DashboardGridProps {
     detectionThreshold: number;
     batchSize: number;
   };
+  initialResults?: any; // Analysis results from parent
+  videoBlob?: Blob; // Video blob from parent
 }
 
-export function DashboardGrid({ settings }: DashboardGridProps) {
-  const [recordedVideo, setRecordedVideo] = useState<Blob | null>(null);
-  const [analysisResults, setAnalysisResults] = useState<any>(null);
+export function DashboardGrid({ settings, initialResults, videoBlob: initialVideoBlob }: DashboardGridProps) {
+  const [recordedVideo, setRecordedVideo] = useState<Blob | null>(initialVideoBlob || null);
+  const [analysisResults, setAnalysisResults] = useState<any>(initialResults || null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleVideoRecorded = (blob: Blob) => {
@@ -75,77 +76,126 @@ export function DashboardGrid({ settings }: DashboardGridProps) {
     }
   };
 
+  // Calculate key metrics
+  const getKeyMetrics = () => {
+    if (!analysisResults?.data?.summary) return null;
+    
+    const summary = analysisResults.data.summary;
+    const emotions = summary.emotions?.statistics || {};
+    
+    // Find dominant emotion
+    const dominantEmotion = Object.entries(emotions)
+      .sort(([,a]: [string, any], [,b]: [string, any]) => b.mean - a.mean)[0];
+    
+    // Calculate overall activity level
+    const totalActivity = Object.values(emotions)
+      .reduce((sum: number, stat: any) => sum + stat.mean, 0);
+
+    return {
+      facesDetected: summary.faces_detected || 0,
+      totalFrames: summary.total_frames || 0,
+      dominantEmotion: dominantEmotion ? {
+        name: dominantEmotion[0],
+        value: (dominantEmotion[1] as any).mean * 100
+      } : null,
+      activityLevel: Math.min(100, totalActivity * 100)
+    };
+  };
+
+  const metrics = getKeyMetrics();
+
   return (
-    <div className="grid grid-cols-12 gap-6 h-full">
-      {/* Video Recording Section - Large Box */}
-      <Card className="col-span-12 lg:col-span-8 p-6">
-        <div className="h-full flex flex-col">
-          <h3 className="text-lg font-semibold mb-4">Record or Upload Video</h3>
-          <div className="flex-1">
-            <VideoRecorder 
-              onVideoRecorded={handleVideoRecorded}
-              isAnalyzing={isAnalyzing}
-            />
-          </div>
+    <div className="space-y-6">
+      {/* Quick Metrics */}
+      {metrics && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
+                <Users className="h-8 w-8 text-blue-500" />
+                <div>
+                  <p className="text-2xl font-bold">{metrics.facesDetected}</p>
+                  <p className="text-xs text-muted-foreground">Faces Detected</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
+                <Clock className="h-8 w-8 text-green-500" />
+                <div>
+                  <p className="text-2xl font-bold">{metrics.totalFrames}</p>
+                  <p className="text-xs text-muted-foreground">Frames Processed</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {metrics.dominantEmotion && (
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <TrendingUp className="h-8 w-8 text-purple-500" />
+                  <div>
+                    <p className="text-lg font-bold capitalize">{metrics.dominantEmotion.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {metrics.dominantEmotion.value.toFixed(1)}% dominant
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
+                <Activity className="h-8 w-8 text-orange-500" />
+                <div>
+                  <p className="text-2xl font-bold">{metrics.activityLevel.toFixed(0)}%</p>
+                  <p className="text-xs text-muted-foreground">Activity Level</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </Card>
+      )}
 
-      {/* Quick Stats - Small Boxes */}
-      <div className="col-span-12 lg:col-span-4 grid gap-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-2">Analysis Status</h3>
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">
-              {isAnalyzing ? 'Analyzing...' : recordedVideo ? 'Ready' : 'Waiting for video'}
-            </p>
-            {analysisResults && (
-              <>
-                <p className="text-2xl font-bold">
-                  {analysisResults.data?.summary?.faces_detected || 0}
-                </p>
-                <p className="text-xs text-muted-foreground">Faces Detected</p>
-              </>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-2">Processing Settings</h3>
-          <div className="space-y-1 text-sm">
-            <p>Frame Skip: <span className="font-medium">{settings.frameSkip}</span></p>
-            <p>Analysis: <span className="font-medium capitalize">{settings.analysisType}</span></p>
-            <p>Style: <span className="font-medium capitalize">{settings.visualizationStyle}</span></p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Video Preview - Medium Box */}
-      {recordedVideo && (
-        <Card className="col-span-12 lg:col-span-6 p-6">
-          <h3 className="text-lg font-semibold mb-4">Video Preview</h3>
-          <VideoPreview videoBlob={recordedVideo} />
+      {/* Main Visualization */}
+      {analysisResults && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {settings.visualizationStyle === 'timeline' && 'Emotion Timeline'}
+              {settings.visualizationStyle === 'heatmap' && 'Action Unit Heatmap'}
+              {settings.visualizationStyle === 'distribution' && 'Emotion Distribution'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-96">
+              {renderVisualization()}
+            </div>
+          </CardContent>
         </Card>
       )}
 
-      {/* Analysis Summary - Medium Box */}
-      {analysisResults && (
-        <Card className="col-span-12 lg:col-span-6 p-6">
-          <h3 className="text-lg font-semibold mb-4">Analysis Summary</h3>
-          <AnalysisSummary results={analysisResults} />
-        </Card>
-      )}
-
-      {/* Main Visualization - Full Width */}
-      {analysisResults && (
-        <Card className="col-span-12 p-6">
-          <h3 className="text-lg font-semibold mb-4">
-            {settings.visualizationStyle === 'timeline' && 'Emotion Timeline'}
-            {settings.visualizationStyle === 'heatmap' && 'Action Unit Heatmap'}
-            {settings.visualizationStyle === 'distribution' && 'Emotion Distribution'}
-          </h3>
-          <div className="h-96">
-            {renderVisualization()}
-          </div>
+      {/* Processing Status */}
+      {isAnalyzing && (
+        <Card>
+          <CardContent className="p-6">
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Activity className="h-5 w-5 animate-spin" />
+                <span className="font-medium">Analyzing facial expressions...</span>
+              </div>
+              <Progress value={undefined} className="h-2" />
+              <p className="text-sm text-muted-foreground">
+                Processing with frame skip: {settings.frameSkip}, Analysis: {settings.analysisType}
+              </p>
+            </div>
+          </CardContent>
         </Card>
       )}
     </div>
