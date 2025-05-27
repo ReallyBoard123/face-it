@@ -19,6 +19,7 @@ import {
 import { Play, Loader2, AlertTriangle, Video, Gamepad2, Target } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StressClickGame } from '../components/games/stress-click-games';
+import FlappyBirdGame from '../components/games/flappy-bird';
 
 type GameFlowState =
   | "idle"
@@ -32,7 +33,6 @@ type GameFlowState =
 type GameType = "flappy_bird" | "stress_click";
 
 const RECORDING_DURATION_SECONDS = 30;
-const FLAPPY_BIRD_EMBED_URL = "https://remarkablegames.org/flappy-bird/";
 
 export default function Home() {
   const [settings, setSettings] = useState({
@@ -51,8 +51,6 @@ export default function Home() {
   const [gameEvents, setGameEvents] = useState<Array<{ type: string; data: any; timestamp: number }>>([]);
 
   const videoRecorderRef = useRef<VideoRecorderHandles>(null);
-  const gameIframeRef = useRef<HTMLIFrameElement>(null);
-  const [gameIframeKey, setGameIframeKey] = useState(Date.now());
 
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [countdown, setCountdown] = useState(RECORDING_DURATION_SECONDS);
@@ -108,8 +106,8 @@ export default function Home() {
     setAnalysisResults(null);
     setErrorMessage(null);
     setGameEvents([]);
-    setGameIframeKey(Date.now());
-
+    setCountdown(RECORDING_DURATION_SECONDS);
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
     videoRecorderRef.current?.startRecording()
       .then(() => {
         setFlowState("game_active_recording");
@@ -317,14 +315,7 @@ export default function Home() {
                         onGameEvent={handleGameEvent}
                       />
                     ) : (
-                      <iframe
-                        key={gameIframeKey}
-                        ref={gameIframeRef}
-                        src={FLAPPY_BIRD_EMBED_URL}
-                        title="Flappy Bird Game"
-                        className="w-full h-full border-0 rounded-md"
-                        style={{minWidth: '400px', minHeight: '490px'}}
-                      />
+                      <FlappyBirdGame />
                     )}
                   </CardContent>
                 </Card>
