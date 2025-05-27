@@ -77,7 +77,9 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
   const emitGameEvent = useCallback((type: string, data: any) => {
     if (onGameEvent && gameStartTimeRef.current) {
       const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
-      onGameEvent({ type, data, timestamp });
+      setTimeout(() => {
+        onGameEvent({ type, data, timestamp });
+      }, 0);
     }
   }, [onGameEvent]);
 

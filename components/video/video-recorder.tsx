@@ -3,25 +3,24 @@
 
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { Square, Circle, Video as VideoIcon } from 'lucide-react'; // Removed unused icons
-import { Button } from '../ui/button'; // Assuming you have this
+import { Square, Circle, Video as VideoIcon } from 'lucide-react';
+import { Button } from '../ui/button';
 
-// Define props
 interface VideoRecorderProps {
   onVideoRecorded: (blob: Blob) => void;
-  isAnalyzing: boolean; // Parent indicates if backend analysis is happening
-  recordingDuration?: number; // Optional: stops recording after X seconds
+  isAnalyzing: boolean;
+  recordingDuration?: number;
   onRecordingStarted?: () => void;
   onRecordingStopped?: (blob: Blob) => void;
-  showControls?: boolean; // Whether to show the default record/upload tabs and buttons
+  showControls?: boolean;
 }
 
-// Define handle types for the ref
 export interface VideoRecorderHandles {
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   getStream: () => MediaStream | null;
   requestPermissions: () => Promise<MediaStream | null>;
+  captureFrame: () => string | null; // Added for capturing current frame
 }
 
 const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
@@ -31,9 +30,8 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
     recordingDuration,
     onRecordingStarted,
     onRecordingStopped,
-    showControls = true, // Default to showing controls
+    showControls = true,
   }, ref) => {
-    // Removed unused upload mode
     const [isRecordingInternal, setIsRecordingInternal] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const [stream, setStream] = useState<MediaStream | null>(null);
@@ -100,9 +98,8 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
 
         mediaRecorder.onstop = () => {
           const blob = new Blob(chunksRef.current, { type: options.mimeType || 'video/webm' });
-          onVideoRecorded(blob); // Use the main callback for the final blob
-          if (onRecordingStopped) onRecordingStopped(blob); // Also call specific stop callback
-          // Do not stop stream tracks here, allow parent to manage stream lifetime
+          onVideoRecorded(blob);
+          if (onRecordingStopped) onRecordingStopped(blob);
         };
         
         mediaRecorder.onerror = (event) => {
@@ -114,7 +111,6 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
             if (timerRef.current) clearInterval(timerRef.current);
             if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
         };
-
 
         mediaRecorder.start();
         setIsRecordingInternal(true);
@@ -142,17 +138,31 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
       setIsRecordingInternal(false);
       if (timerRef.current) clearInterval(timerRef.current);
       if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
-      // Stream is not stopped here; parent controls stream lifecycle via ref or props.
     }, []);
+
+    const captureCurrentFrameAsBase64 = useCallback((): string | null => {
+        if (videoRef.current && videoRef.current.readyState >= videoRef.current.HAVE_CURRENT_DATA && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth;
+          canvas.height = videoRef.current.videoHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.8); // Use JPEG with quality for smaller size
+          }
+        }
+        console.warn("VideoRecorder: Could not capture frame. Video not ready or dimensions are zero.");
+        return null;
+      }, []);
 
     useImperativeHandle(ref, () => ({
       startRecording: startManualRecording,
       stopRecording: stopManualRecording,
       getStream: () => stream,
       requestPermissions: requestPermissionsAndSetupStream,
+      captureFrame: captureCurrentFrameAsBase64,
     }));
 
-    // Cleanup on unmount
     useEffect(() => {
       return () => {
         stream?.getTracks().forEach(track => track.stop());
@@ -190,7 +200,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
           )}
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
 
         {showControls && (
           <>
@@ -199,7 +209,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
                 onClick={isRecordingInternal ? stopManualRecording : startManualRecording}
                 variant={isRecordingInternal ? "destructive" : "default"}
                 className="w-full"
-                disabled={isAnalyzing || (!stream && !isRecordingInternal)}
+                disabled={isAnalyzing || (!stream && !isRecordingInternal && !error) } // Disable if no stream and not recording unless there's an error
               >
                 {isRecordingInternal ? <Square className="mr-2 h-4 w-4" /> : <Circle className="mr-2 h-4 w-4" />}
                 {isRecordingInternal ? 'Stop Recording' : 'Start Recording'}
