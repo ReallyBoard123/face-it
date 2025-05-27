@@ -1,7 +1,7 @@
 // components/analysis/key-moments-display.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle, Zap, Trophy, Smile, Meh, Frown, ImageOff } from 'lucide-react';
+import { AlertCircle, Zap, Trophy, Smile, Meh, Frown, ImageOff, Eye, EyeOff } from 'lucide-react';
 
 export interface KeyMoment {
   timestamp: number;
@@ -32,11 +32,27 @@ const getIconForReason = (reason: string, type: string) => {
 };
 
 export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  const toggleVisibility = () => {
+    setIsVisible(!isVisible);
+  };
   if (!moments || moments.length === 0) {
     return (
-      <Card>
-        <CardHeader><CardTitle className="text-base md:text-lg">Key Moments</CardTitle></CardHeader>
-        <CardContent>
+      <Card className="relative">
+        <button 
+          onClick={toggleVisibility} 
+          className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors z-10"
+          aria-label={isVisible ? "Hide key moments" : "Show key moments"}
+        >
+          {isVisible ? 
+            <Eye className="h-5 w-5 text-gray-500" /> : 
+            <EyeOff className="h-5 w-5 text-gray-500" />}
+        </button>
+        <CardHeader>
+          <CardTitle className="text-base md:text-lg">Key Moments</CardTitle>
+        </CardHeader>
+        <CardContent className={isVisible ? "" : "hidden"}>
           <p className="text-sm text-muted-foreground">No key moments were identified for this session.</p>
         </CardContent>
       </Card>
@@ -47,11 +63,20 @@ export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
   // const sortedMoments = [...moments].sort((a, b) => a.timestamp - b.timestamp);
 
   return (
-    <Card>
+    <Card className="relative">
+      <button 
+        onClick={toggleVisibility} 
+        className="absolute top-4 right-4 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors z-10"
+        aria-label={isVisible ? "Hide key moments" : "Show key moments"}
+      >
+        {isVisible ? 
+          <Eye className="h-5 w-5 text-gray-500" /> : 
+          <EyeOff className="h-5 w-5 text-gray-500" />}
+      </button>
       <CardHeader>
         <CardTitle className="text-base md:text-lg">Key Moments</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className={isVisible ? "" : "hidden"}>
         <div className="overflow-x-auto pb-4"> {/* Simple horizontal scroll */}
           <div className="flex space-x-4">
             {moments.map((moment, index) => (
