@@ -315,7 +315,7 @@ export default function Home() {
                         onGameEvent={handleGameEvent}
                       />
                     ) : (
-                      <FlappyBirdGame />
+                      <FlappyBirdGame onGameEvent={handleGameEvent} />
                     )}
                   </CardContent>
                 </Card>

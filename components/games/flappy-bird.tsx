@@ -37,6 +37,11 @@ interface PipeStateType {
   scored: boolean;
 }
 
+interface FlappyBirdGameProps {
+  onGameEvent?: (event: { type: string; data: any; timestamp: number }) => void;
+  onGameComplete?: (stats: { score: number }) => void; // Added for potential future use
+}
+
 // --- Helper Components ---
 
 interface BirdProps {
@@ -146,7 +151,7 @@ const ScreenOverlay: React.FC<ScreenOverlayProps> = ({ title, message, buttonTex
 
 
 // --- Main Game Component ---
-export default function FlappyBirdGame() {
+export default function FlappyBirdGame({ onGameEvent, onGameComplete }: FlappyBirdGameProps) {
   const [gameState, setGameState] = useState<GameStateType>('start');
   const [birdY, setBirdY] = useState<number>(GAME_HEIGHT / 2 - BIRD_HEIGHT / 2);
   const [birdVelocity, setBirdVelocity] = useState<number>(0);
@@ -157,25 +162,44 @@ export default function FlappyBirdGame() {
   const gameLoopRef = useRef<number | null>(null);
   const pipeSpawnTimerRef = useRef<NodeJS.Timeout | null>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null); // Ref for the game area div
+  const gameStartTimeRef = useRef<number | null>(null); // Ref for game start time
+
+  const emitGameEvent = useCallback((type: string, data: any) => {
+    if (onGameEvent && gameStartTimeRef.current) {
+      const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
+      onGameEvent({ type, data, timestamp });
+    }
+  }, [onGameEvent]);
 
   const resetGame = useCallback((startPlaying = true) => {
     setBirdY(GAME_HEIGHT / 2 - BIRD_HEIGHT / 2);
     setBirdVelocity(0);
     setBirdRotation(0);
     setPipes([]);
-    setScore(0);
+    setScore(0); // Score is reset here
     if (startPlaying) {
+      gameStartTimeRef.current = Date.now(); // Set game start time
+      emitGameEvent('flappy_bird_game_start', { score: 0 });
       setGameState('playing');
     } else {
       setGameState('start');
     }
-  }, []);
+  }, [emitGameEvent]);
 
   const jump = useCallback(() => {
     if (gameState !== 'playing') return;
     setBirdVelocity(JUMP_STRENGTH);
     setBirdRotation(BIRD_ROTATION_UP);
+    // emitGameEvent('flappy_bird_jump', {}); // Optional: if you want to track jumps
   }, [gameState]);
+
+  const handleGameOver = useCallback(() => {
+    setGameState('over');
+    emitGameEvent('flappy_bird_game_over', { finalScore: score });
+    if (onGameComplete) {
+      onGameComplete({ score });
+    }
+  }, [score, emitGameEvent, onGameComplete]);
 
   const handleGameAction = useCallback(() => {
     if (gameState === 'start') {
@@ -198,7 +222,6 @@ export default function FlappyBirdGame() {
 
     window.addEventListener('keydown', handleKeyPress);
     
-    // Click/Tap listener on the game area
     const gameAreaElement = gameAreaRef.current;
     if (gameAreaElement) {
       gameAreaElement.addEventListener('click', handleGameAction);
@@ -232,64 +255,62 @@ export default function FlappyBirdGame() {
         gameLoopRef.current = requestAnimationFrame(gameTick);
         return;
       }
-      // const deltaTime = (timestamp - lastTime) / 1000; // Time in seconds, if needed for frame-independent physics
-      // lastTime = timestamp;
 
       // Bird physics
       setBirdVelocity(v => v + GRAVITY);
       setBirdY(y => {
         const newY = y + birdVelocity;
-        // Collision with top/bottom boundaries
         if (newY <= 0) {
-          setGameState('over');
+          handleGameOver();
           return 0;
         }
         if (newY >= GAME_HEIGHT - BIRD_HEIGHT) {
-          setGameState('over');
+          handleGameOver();
           return GAME_HEIGHT - BIRD_HEIGHT;
         }
         return newY;
       });
 
       // Bird rotation
-      if (birdVelocity < 0) { // Moving up
-        // Rotation is set on jump, could add slight adjustment here if needed
-      } else { // Moving down
+      if (birdVelocity < 0) { 
+        // Rotation is set on jump
+      } else { 
         setBirdRotation(r => Math.min(r + BIRD_ROTATION_SPEED, BIRD_ROTATION_DOWN_MAX));
       }
 
       // Pipe movement, scoring, and collision
       setPipes(prevPipes => {
         let newPipes = prevPipes.map(pipe => ({ ...pipe, x: pipe.x - PIPE_SPEED }));
-        let newScore = score;
+        let scoreChanged = false;
+        let currentScore = score;
 
         for (const pipe of newPipes) {
-          // Scoring: if bird has passed the pipe's right edge
           if (!pipe.scored && pipe.x + PIPE_WIDTH < BIRD_X_POSITION) {
             pipe.scored = true;
-            newScore++;
+            currentScore++;
+            scoreChanged = true;
           }
 
-          // Collision detection
           const birdRect = { x: BIRD_X_POSITION, y: birdY, width: BIRD_WIDTH, height: BIRD_HEIGHT };
           const pipeRightEdge = pipe.x + PIPE_WIDTH;
 
-          // Check if bird is horizontally aligned with the current pipe
           if (BIRD_X_POSITION + BIRD_WIDTH > pipe.x && BIRD_X_POSITION < pipeRightEdge) {
             const topPipeBottomEdge = pipe.topPipeHeight;
             const bottomPipeTopEdge = pipe.topPipeHeight + PIPE_GAP;
 
             if (birdY < topPipeBottomEdge || birdY + BIRD_HEIGHT > bottomPipeTopEdge) {
-              setGameState('over');
-              // No need to break, state change will stop the loop
+              handleGameOver();
             }
           }
         }
-        if (newScore !== score) setScore(newScore);
-        return newPipes.filter(pipe => pipe.x > -PIPE_WIDTH); // Remove off-screen pipes
+        if (scoreChanged) {
+          setScore(currentScore);
+          emitGameEvent('flappy_bird_score_update', { score: currentScore });
+        }
+        return newPipes.filter(pipe => pipe.x > -PIPE_WIDTH);
       });
       
-      if (gameState === 'playing') { // Check again as state might have changed within this tick
+      if (gameState === 'playing') {
           gameLoopRef.current = requestAnimationFrame(gameTick);
       }
     };
@@ -299,9 +320,9 @@ export default function FlappyBirdGame() {
     return () => {
       if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
     };
-  }, [gameState, birdVelocity, birdY, score]); // Dependencies for the game loop
+  }, [gameState, birdVelocity, birdY, score, emitGameEvent, handleGameOver]);
 
-  // NEW: Separate useEffect for Pipe Spawning
+  // Pipe Spawning
   useEffect(() => {
     if (gameState === 'playing') {
       pipeSpawnTimerRef.current = setInterval(() => {
@@ -321,12 +342,11 @@ export default function FlappyBirdGame() {
         }
       };
     } else {
-      // Ensure timer is cleared if gameState is not 'playing' (e.g., 'start' or 'over')
       if (pipeSpawnTimerRef.current) {
         clearInterval(pipeSpawnTimerRef.current);
       }
     }
-  }, [gameState]); // Only depends on gameState
+  }, [gameState]);
 
 
   return (
@@ -337,10 +357,10 @@ export default function FlappyBirdGame() {
         style={{ 
             width: GAME_WIDTH, 
             height: GAME_HEIGHT, 
-            backgroundImage: "url('/assets/background.png')", // Optional: if you have a background image
-            backgroundColor: '#71c5cf' // Fallback color
+            backgroundImage: "url('/assets/background.png')",
+            backgroundColor: '#71c5cf'
         }}
-        tabIndex={0} // Make div focusable for keyboard events if window listener is removed
+        tabIndex={0}
       >
         {gameState === 'start' && (
           <ScreenOverlay 
@@ -359,7 +379,6 @@ export default function FlappyBirdGame() {
           />
         )}
 
-        {/* Render game elements if playing or game over (to show final state) */}
         {(gameState === 'playing' || gameState === 'over') && (
           <>
             <Bird y={birdY} rotation={birdRotation} />
