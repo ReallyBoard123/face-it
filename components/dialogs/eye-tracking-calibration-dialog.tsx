@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -106,10 +105,10 @@ export function EyeTrackingCalibrationDialog({
           </DialogTitle>
           <DialogDescription>
             {calibrationStep === 'ready' && 
-              "This will start a 9-point calibration process to train the eye tracking model."
+              "This will start EyeTrax's built-in 9-point calibration process."
             }
             {calibrationStep === 'calibrating' && 
-              "Follow the on-screen instructions to complete the calibration."
+              "Follow the calibration window instructions. Look at each point when it appears."
             }
             {calibrationStep === 'success' && 
               "Calibration completed successfully! You can now use eye tracking."
@@ -130,8 +129,8 @@ export function EyeTrackingCalibrationDialog({
                   <ul className="text-sm space-y-1 ml-4 list-disc">
                     <li>Ensure your webcam is connected and working</li>
                     <li>Position yourself comfortably in front of the screen</li>
-                    <li>Make sure you have good lighting on your face</li>
-                    <li>The calibration window will open in fullscreen</li>
+                    <li>EyeTrax will open its own calibration window</li>
+                    <li>Follow the on-screen instructions</li>
                   </ul>
                 </div>
               </AlertDescription>
@@ -144,10 +143,10 @@ export function EyeTrackingCalibrationDialog({
               <div className="text-center">
                 <p className="font-medium">Calibration in progress...</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Look at each calibration point when it appears and follow the instructions.
+                  Look at each calibration point when it appears in the EyeTrax window.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Press ESC to cancel calibration if needed.
+                  Press ESC in the calibration window to cancel if needed.
                 </p>
               </div>
             </div>
@@ -216,7 +215,7 @@ export function EyeTrackingCalibrationDialog({
             <Button onClick={() => onOpenChange(false)}>
               Close
             </Button>
-          )}
+            )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
