@@ -295,7 +295,7 @@ export default function Home() {
     formData.append('file', videoBlob, selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
     formData.append('settings', JSON.stringify(settings));
     try {
-      const response = await fetch('http://localhost:8000/analyze-video', { method: 'POST', body: formData });
+      const response = await fetch('http://localhost:8000/analyze/face', { method: 'POST', body: formData });
       if (!response.ok) { const errData = await response.json(); throw new Error(errData.detail?.message || 'Analysis server error.'); }
       const data = await response.json();
       if (data.status === "nodata"){
