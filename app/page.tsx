@@ -33,6 +33,7 @@ export default function Home() {
     visualizationStyle: 'timeline' as VisualizationStyleString, 
     detectionThreshold: 0.5, 
     batchSize: 1,
+    eyeTrackingEnabled: false,
   });
 
   const recordingFlow = useRecordingFlow();
