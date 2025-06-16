@@ -1,4 +1,4 @@
-// app/page.tsx - Simplified with extracted components and hooks
+// app/page.tsx
 'use client';
 
 import React, { useEffect, useRef } from 'react';
@@ -7,6 +7,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar';
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
 import { VideoPreview } from '@/components/video/video-preview';
 import { RecordingSessionManager } from '@/components/recording/recording-session-manager';
+import { EyeTrackingPanel } from '@/components/eye-tracking/eye-tracking-panel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from "@/components/ui/separator";
@@ -34,6 +35,8 @@ export default function Home() {
     detectionThreshold: 0.5, 
     batchSize: 1,
   });
+
+  // Eye tracking state - removed since now self-contained
 
   const recordingFlow = useRecordingFlow();
   const websiteSession = useWebsiteSession();
@@ -141,7 +144,10 @@ export default function Home() {
   return (
     <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       {!isActiveSession && (
-        <AppSidebar settings={settings} onSettingsChange={setSettings} />
+        <AppSidebar 
+          settings={settings} 
+          onSettingsChange={setSettings}
+        />
       )}
       <SidebarInset>
         <PageHeader />
@@ -290,6 +296,9 @@ export default function Home() {
           </div>
         </main>
       </SidebarInset>
+
+      {/* Eye Tracking Panel - Self-contained */}
+      <EyeTrackingPanel />
     </SidebarProvider>
   );
 }

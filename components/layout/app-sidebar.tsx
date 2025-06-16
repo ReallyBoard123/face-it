@@ -1,7 +1,8 @@
+// components/layout/app-sidebar.tsx
 'use client';
 
 import * as React from "react";
-import { X, SettingsIcon, SlidersHorizontal } from 'lucide-react'; // Added SlidersHorizontal
+import { X, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -13,16 +14,12 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
 import {
   Sidebar,
   SidebarContent,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarRail,
-  useSidebar, // Import useSidebar
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -36,25 +33,21 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSettingsChange: (settings: any) => void;
 }
 
-export function AppSidebar({ settings, onSettingsChange, ...props }: AppSidebarProps) {
-  const { openMobile, setOpenMobile, state } = useSidebar(); // Get sidebar state
+export function AppSidebar({ 
+  settings, 
+  onSettingsChange, 
+  ...props 
+}: AppSidebarProps) {
+  const { setOpenMobile } = useSidebar();
 
   const updateSetting = (key: string, value: any) => {
     onSettingsChange({ ...settings, [key]: value });
   };
 
-  // Determine if the main sidebar content or settings should be shown
-  const isSettingsView = state === 'expanded' && openMobile; // Example logic, adjust as needed
-
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="p-0">
-        {/* Header for the main sidebar content - adjust if needed */}
-      </SidebarHeader>
+      <SidebarHeader className="p-0" />
       <SidebarContent>
-        {/* Conditional rendering based on a toggle or state */}
-        {/* For simplicity, we'll always show settings for now if sidebar is open */}
-        {/* You might want a more sophisticated way to toggle between nav and settings */}
         <div className="flex flex-col h-full">
           {/* Settings Header */}
           <div className="p-6 border-b flex items-center justify-between">
@@ -65,8 +58,8 @@ export function AppSidebar({ settings, onSettingsChange, ...props }: AppSidebarP
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setOpenMobile(false)} // Close button for mobile
-              className="md:hidden" // Only show on mobile
+              onClick={() => setOpenMobile(false)}
+              className="md:hidden"
             >
               <X className="h-4 w-4" />
             </Button>
@@ -200,7 +193,6 @@ export function AppSidebar({ settings, onSettingsChange, ...props }: AppSidebarP
               variant="outline"
               className="w-full"
               onClick={() => {
-                // Reset to defaults
                 onSettingsChange({
                   frameSkip: 30,
                   analysisType: 'combined',
