@@ -9,9 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 # Import routers and logic functions from the new modules
-from eye_tracker import router as eye_tracker_router
-from eye_tracker import EYETRAX_AVAILABLE
-from eye_tracker import active_sessions as eye_tracking_sessions
+
 from facial_expression_recognizer import (
     analyze_facial_expressions,
     get_detector as get_feat_detector,
@@ -38,7 +36,6 @@ app.add_middleware(
 )
 
 # --- Include Routers ---
-app.include_router(eye_tracker_router)
 
 # --- Combined Endpoints ---
 
@@ -53,13 +50,8 @@ async def root():
                 "library": "py-feat",
                 "status": "✅ Detector available" if get_feat_detector() else "❌ Detector not initialized",
                 "docs": "/docs#/Facial%20Expression/analyze_face_endpoint_analyze_face_post",
-            },
-            "eye_tracking": {
-                "library": "EyeTrax",
-                "status": "✅ Available" if EYETRAX_AVAILABLE else "❌ Not installed",
-                "docs": "/docs#/Eye%20Tracking",
-            },
-        },
+            }
+        }
     }
 
 @app.get("/health")
@@ -80,12 +72,8 @@ async def health_check():
             "facial_expression": {
                 "detector_ready": feat_ready,
                 "cache_size": len(face_expression_cache),
-            },
-            "eye_tracking": {
-                "library_available": EYETRAX_AVAILABLE,
-                "active_sessions": len(eye_tracking_sessions),
-            },
-        },
+            }
+        }
     }
 
 # --- Service-Specific Endpoints ---
@@ -127,7 +115,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Failed to initialize py-feat detector on startup: {e}")
 
-    if not EYETRAX_AVAILABLE:
-        logger.warning("- eyetrax library not found. Eye tracking endpoints will not work.")
+
 
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True, log_level="info")
