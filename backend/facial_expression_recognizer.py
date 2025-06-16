@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import cv2
 import numpy as np
 import pandas as pd
+import torch  # Added torch import
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -136,26 +137,28 @@ def run_detector_sync(file_path: str, config: AnalysisConfig) -> pd.DataFrame:
     is_image = file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))
     
     try:
-        if is_image:
-            logger.info("Processing as image")
-            results = detector_instance.detect_image(file_path)
-            if results is None or (hasattr(results, 'empty') and results.empty):
-                raise Exception("Detector returned None or empty DataFrame - no faces detected")
-            logger.info("Image detection completed successfully")
-            return results
-        else:
-            # Process as video
-            detect_params = {
-                "skip_frames": config.frame_skip,
-                "face_detection_threshold": config.detection_threshold,
-                "progress_bar": True,
-            }
-            logger.info(f"Running video detector with params: {detect_params}")
-            results = detector_instance.detect_video(file_path, **detect_params)
-            if results is None or (hasattr(results, 'empty') and results.empty):
-                raise Exception("Detector returned None or empty DataFrame - no faces detected")
-            logger.info(f"Video detection completed successfully: {len(results)} frames processed")
-            return results
+        # Disable gradients to prevent tensor issues
+        with torch.no_grad():
+            if is_image:
+                logger.info("Processing as image")
+                results = detector_instance.detect_image(file_path)
+                if results is None or (hasattr(results, 'empty') and results.empty):
+                    raise Exception("Detector returned None or empty DataFrame - no faces detected")
+                logger.info("Image detection completed successfully")
+                return results
+            else:
+                # Process as video
+                detect_params = {
+                    "skip_frames": config.frame_skip,
+                    "face_detection_threshold": config.detection_threshold,
+                    "progress_bar": True,
+                }
+                logger.info(f"Running video detector with params: {detect_params}")
+                results = detector_instance.detect_video(file_path, **detect_params)
+                if results is None or (hasattr(results, 'empty') and results.empty):
+                    raise Exception("Detector returned None or empty DataFrame - no faces detected")
+                logger.info(f"Video detection completed successfully: {len(results)} frames processed")
+                return results
     except Exception as e:
         logger.error(f"Detector error: {e}")
         raise

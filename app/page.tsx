@@ -94,7 +94,8 @@ export default function Home() {
     formData.append('settings', JSON.stringify(settings));
     
     try {
-      const response = await fetch('http://localhost:8000/analyze/face', { method: 'POST', body: formData });
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', body: formData });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.detail?.message || 'Analysis server error.');
