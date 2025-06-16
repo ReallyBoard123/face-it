@@ -1,14 +1,17 @@
 # Core dependencies
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
+fastapi
+uvicorn
+python-multipart
 
 # Data processing
 numpy==1.23.5
-pandas==2.0.3
+pandas
+scipy==1.10.1
 
 # Computer vision
-opencv-python==4.8.1.78
-Pillow==10.0.1
+opencv-python
+Pillow
 
 # Facial expression analysis
-py-feat==0.6.2
+py-feat
+py-feat

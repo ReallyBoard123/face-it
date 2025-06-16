@@ -128,22 +128,34 @@ async def convert_video(input_path: str, output_path: str) -> bool:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, convert_video_sync, input_path, output_path)
 
-def run_detector_sync(video_path: str, config: AnalysisConfig) -> pd.DataFrame:
-    """Synchronously run the py-feat detector on a video."""
+def run_detector_sync(file_path: str, config: AnalysisConfig) -> pd.DataFrame:
+    """Synchronously run the py-feat detector on an image or video."""
     detector_instance = get_detector()
-    detect_params = {
-        "data_type": "video",
-        "skip_frames": config.frame_skip,
-        "face_detection_threshold": config.detection_threshold,
-        "progress_bar": True,
-    }
-    logger.info(f"Running detector with params: {detect_params}")
+    
+    # Check if file is an image by extension
+    is_image = file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.tiff'))
+    
     try:
-        results = detector_instance.detect(video_path, **detect_params)
-        if results is None or (hasattr(results, 'empty') and results.empty):
-            raise Exception("Detector returned None or empty DataFrame - no faces detected")
-        logger.info(f"Detection completed successfully: {len(results)} frames processed")
-        return results
+        if is_image:
+            logger.info("Processing as image")
+            results = detector_instance.detect_image(file_path)
+            if results is None or (hasattr(results, 'empty') and results.empty):
+                raise Exception("Detector returned None or empty DataFrame - no faces detected")
+            logger.info("Image detection completed successfully")
+            return results
+        else:
+            # Process as video
+            detect_params = {
+                "skip_frames": config.frame_skip,
+                "face_detection_threshold": config.detection_threshold,
+                "progress_bar": True,
+            }
+            logger.info(f"Running video detector with params: {detect_params}")
+            results = detector_instance.detect_video(file_path, **detect_params)
+            if results is None or (hasattr(results, 'empty') and results.empty):
+                raise Exception("Detector returned None or empty DataFrame - no faces detected")
+            logger.info(f"Video detection completed successfully: {len(results)} frames processed")
+            return results
     except Exception as e:
         logger.error(f"Detector error: {e}")
         raise
