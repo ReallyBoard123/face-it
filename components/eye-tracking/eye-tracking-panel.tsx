@@ -2,10 +2,11 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { EyeTrackingSwitch } from './eye-tracking-switch';
-import { GazeIndicator } from './gaze-indicator';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { CalibrationOverlay } from './calibration-overlay';
 import { useWebGazer } from '@/hooks/use-webgazer';
+import { Eye, EyeOff, Target } from 'lucide-react';
 
 export function EyeTrackingPanel() {
   const {
@@ -19,63 +20,82 @@ export function EyeTrackingPanel() {
     getCurrentCalibrationPoint,
   } = useWebGazer();
 
-  const handleToggleEyeTracking = async () => {
-    if (isEnabled || isCalibrating) {
-      stopEyeTracking();
-    } else {
-      await startCalibration();
-    }
-  };
-
   const currentPoint = getCurrentCalibrationPoint();
 
   return (
     <>
-      {/* Eye Tracking Controls */}
-      <div className="fixed top-4 right-4 z-40">
-        <Card className="p-4 shadow-lg">
-          <CardContent className="p-0 space-y-3">
-            <EyeTrackingSwitch
-              enabled={isEnabled}
-              onToggle={handleToggleEyeTracking}
-              disabled={isInitializing}
-            />
-            {isInitializing && (
-              <p className="text-xs text-blue-600 dark:text-blue-400">
-                🔄 Initializing...
-              </p>
+      <div className="fixed bottom-4 right-4 w-80 max-w-[calc(100vw-2rem)] z-40">
+        <Card className="bg-background/95 backdrop-blur-sm border shadow-lg">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Eye className="h-4 w-4" />
+              Eye Tracking
+              {isEnabled && (
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!isEnabled && !isCalibrating && (
+              <Button
+                onClick={startCalibration}
+                disabled={isInitializing}
+                size="sm"
+                className="w-full"
+              >
+                {isInitializing ? (
+                  <>
+                    <Target className="mr-2 h-4 w-4 animate-spin" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <Target className="mr-2 h-4 w-4" />
+                    Start Calibration
+                  </>
+                )}
+              </Button>
             )}
+
             {isCalibrating && (
-              <p className="text-xs text-orange-600 dark:text-orange-400">
-                🎯 Point {(currentPoint?.index || 0) + 1}/20
-              </p>
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Calibrating... Click each red dot while looking at it.
+                </div>
+                <Button
+                  onClick={nextCalibrationPoint}
+                  size="sm"
+                  className="w-full"
+                >
+                  Next Point ({currentPoint ? currentPoint.index + 1 : 0}/20)
+                </Button>
+              </div>
             )}
+
             {isEnabled && (
-              <p className="text-xs text-green-600 dark:text-green-400">
-                ✓ Active ({gazeData.length} gaze points)
-              </p>
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">
+                  Eye tracking active • {gazeData.length} data points
+                </div>
+                <Button
+                  onClick={stopEyeTracking}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  <EyeOff className="mr-2 h-4 w-4" />
+                  Stop Tracking
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Calibration Overlay */}
-      {isCalibrating && currentPoint && (
-        <div
-          className="fixed w-6 h-6 bg-red-500 rounded-full cursor-pointer animate-pulse border-2 border-white transform -translate-x-1/2 -translate-y-1/2 z-[9999]"
-          style={{
-            left: `${currentPoint.x}%`,
-            top: `${currentPoint.y}%`,
-          }}
-          onClick={nextCalibrationPoint}
-        />
-      )}
-
-      {/* Gaze Indicator - Active during calibration too */}
-      <GazeIndicator 
-        gazeData={gazeData}
-        isEnabled={isEnabled || isCalibrating}
-        showTrail={true}
+      <CalibrationOverlay
+        isCalibrating={isCalibrating}
+        currentPoint={currentPoint}
+        onPointClick={nextCalibrationPoint}
       />
     </>
   );

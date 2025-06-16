@@ -4,13 +4,65 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, Zap, Target, Award } from 'lucide-react'; // Added Award for score
 
+interface GameEvent {
+  type: string;
+  timestamp: number;
+  data: GameEventData;
+}
+
+interface GameEventData {
+  from?: number;
+  to?: number;
+  score?: number;
+  finalScore?: number;
+  [key: string]: unknown;
+}
+
+interface EmotionStats {
+  max: number;
+  peaks?: Array<unknown>;
+}
+
+interface TimelineData {
+  timestamps?: number[];
+  [emotion: string]: number[] | undefined;
+}
+
+interface AnalysisData {
+  summary?: {
+    emotions?: {
+      timeline?: TimelineData;
+      statistics?: Record<string, EmotionStats>;
+    };
+  };
+}
+
 interface EmotionTimelineProps {
-  data: any;
-  gameEvents?: Array<{
-    type: string;
-    timestamp: number;
-    data: any;
-  }>;
+  data: AnalysisData;
+  gameEvents?: GameEvent[];
+}
+
+interface ChartDataPoint {
+  time: string;
+  timeValue: number;
+  [emotion: string]: string | number;
+}
+
+interface TooltipPayload {
+  dataKey: string;
+  value: number;
+  color: string;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string;
+}
+
+interface EventMarker {
+  timestamp: number;
+  events: Array<GameEvent & { color: string }>;
 }
 
 const emotionColors: Record<string, string> = {
@@ -43,15 +95,15 @@ export function EmotionTimeline({ data, gameEvents = [] }: EmotionTimelineProps)
     const timeline = data.summary.emotions.timeline;
     const timestamps = timeline.timestamps || [];
     
-    return timestamps.map((timestamp: number, index: number) => {
-      const dataPoint: any = {
+    return timestamps.map((timestamp: number, index: number): ChartDataPoint => {
+      const dataPoint: ChartDataPoint = {
         time: `${timestamp}s`,
         timeValue: timestamp
       };
       
       Object.keys(timeline).forEach(key => {
-        if (key !== 'timestamps' && timeline[key] && timeline[key][index] !== undefined) {
-          dataPoint[key] = timeline[key][index];
+        if (key !== 'timestamps' && timeline[key] && timeline[key]![index] !== undefined) {
+          dataPoint[key] = timeline[key]![index];
         }
       });
       
@@ -68,7 +120,7 @@ export function EmotionTimeline({ data, gameEvents = [] }: EmotionTimelineProps)
     if (!data?.summary?.emotions?.statistics) return [];
     const stats = data.summary.emotions.statistics;
     return Object.entries(stats)
-      .map(([emotion, stat]: [string, any]) => ({
+      .map(([emotion, stat]: [string, EmotionStats]) => ({
         emotion,
         maxValue: stat.max,
         peaks: stat.peaks?.length || 0
@@ -104,13 +156,13 @@ export function EmotionTimeline({ data, gameEvents = [] }: EmotionTimelineProps)
       }
       groups[roundedTime].push(event);
     });
-    return Object.entries(groups).map(([timestamp, events]) => ({
+    return Object.entries(groups).map(([timestamp, events]): EventMarker => ({
       timestamp: parseInt(timestamp),
       events
     }));
   }, [timelineEvents]);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       const timeValue = parseFloat(String(label).replace('s', ''));
       const eventsAtTime = eventMarkers.find(m => Math.abs(m.timestamp - timeValue) < 1)?.events || [];
@@ -119,7 +171,7 @@ export function EmotionTimeline({ data, gameEvents = [] }: EmotionTimelineProps)
         <div className="bg-background border rounded-lg p-3 shadow-lg max-w-xs">
           <p className="font-medium">{`Time: ${label}`}</p>
           
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry: TooltipPayload, index: number) => (
             <p key={index} style={{ color: entry.color }}>
               {`${entry.dataKey}: ${(entry.value * 100).toFixed(1)}%`}
             </p>

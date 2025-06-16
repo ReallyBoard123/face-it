@@ -1,8 +1,38 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
+interface ActionUnitStats {
+  mean: number;
+  activation_rate: number;
+  max_intensity: number;
+}
+
+interface AnalysisData {
+  summary?: {
+    action_units?: {
+      statistics?: Record<string, ActionUnitStats>;
+    };
+  };
+}
+
 interface AuHeatmapProps {
-  data: any;
+  data: AnalysisData;
+}
+
+interface AuDataPoint {
+  au: string;
+  name: string;
+  intensity: number;
+  activation: number;
+  maxIntensity: number;
+  color: string;
+}
+
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    payload: AuDataPoint;
+  }>;
 }
 
 // AU descriptions for better tooltips
@@ -35,7 +65,7 @@ export function AuHeatmap({ data }: AuHeatmapProps) {
     const auStats = data.summary.action_units.statistics;
     
     return Object.entries(auStats)
-      .map(([au, stats]: [string, any]) => ({
+      .map(([au, stats]: [string, ActionUnitStats]) => ({
         au,
         name: auDescriptions[au] || au,
         intensity: stats.mean * 100,
@@ -64,7 +94,7 @@ export function AuHeatmap({ data }: AuHeatmapProps) {
     return '#01579b'; // Very dark blue
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: TooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

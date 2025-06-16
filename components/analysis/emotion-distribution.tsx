@@ -1,8 +1,44 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
+interface EmotionStats {
+  mean: number;
+  max: number;
+}
+
+interface AnalysisData {
+  summary?: {
+    emotions?: {
+      statistics?: Record<string, EmotionStats>;
+    };
+  };
+}
+
 interface EmotionDistributionProps {
-  data: any;
+  data: AnalysisData;
+}
+
+interface EmotionDataPoint {
+  emotion: string;
+  percentage: number;
+  mean: number;
+  max: number;
+  color: string;
+}
+
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    payload: EmotionDataPoint;
+  }>;
+  label?: string;
+}
+
+interface PieTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    payload: EmotionDataPoint;
+  }>;
 }
 
 const emotionColors: Record<string, string> = {
@@ -24,7 +60,7 @@ export function EmotionDistribution({ data }: EmotionDistributionProps) {
     const emotions = data.summary.emotions.statistics;
     
     return Object.entries(emotions)
-      .map(([emotion, stats]: [string, any]) => ({
+      .map(([emotion, stats]: [string, EmotionStats]) => ({
         emotion: emotion.charAt(0).toUpperCase() + emotion.slice(1),
         percentage: stats.mean * 100,
         mean: stats.mean,
@@ -34,7 +70,7 @@ export function EmotionDistribution({ data }: EmotionDistributionProps) {
       .sort((a, b) => b.percentage - a.percentage);
   }, [data]);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -52,7 +88,7 @@ export function EmotionDistribution({ data }: EmotionDistributionProps) {
     return null;
   };
 
-  const CustomPieTooltip = ({ active, payload }: any) => {
+  const CustomPieTooltip = ({ active, payload }: PieTooltipProps) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

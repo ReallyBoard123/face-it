@@ -1,21 +1,18 @@
 // app/page.tsx
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { VideoRecorderHandles } from '@/components/video/video-recorder';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
 import { VideoPreview } from '@/components/video/video-preview';
 import { RecordingSessionManager } from '@/components/recording/recording-session-manager';
 import { EyeTrackingPanel } from '@/components/eye-tracking/eye-tracking-panel';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
-  SidebarTrigger,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Loader2, Target, Gamepad2, Globe } from 'lucide-react';
 import { StressClickGame } from '@/components/games/stress-click-games';
@@ -36,8 +33,6 @@ export default function Home() {
     batchSize: 1,
   });
 
-  // Eye tracking state - removed since now self-contained
-
   const recordingFlow = useRecordingFlow();
   const websiteSession = useWebsiteSession();
   const videoRecorderRef = React.useRef<VideoRecorderHandles>(null);
@@ -48,39 +43,8 @@ export default function Home() {
     recordingFlow.setErrorMessage
   );
 
-  // Handle video recording completion
-  const handleVideoRecorded = (blob: Blob) => {
-    recordingFlow.stopCountdown();
-    recordingFlow.setRecordedVideoBlob(blob);
-    
-    if (recordingFlow.selectedGame === 'website_browse') {
-      if (recordingFlow.recordedScreenBlob) {
-        recordingFlow.setFlowState("analyzing");
-        analyzeVideo(blob);
-      }
-    } else {
-      recordingFlow.setFlowState("analyzing");
-      analyzeVideo(blob);
-    }
-  };
-
-  // Handle screen recording completion
-  const handleScreenRecorded = (blob: Blob) => {
-    console.log('Screen recording completed:', blob.size, 'bytes');
-    recordingFlow.setRecordedScreenBlob(blob);
-  };
-
-  // Auto-start analysis when both recordings are ready
-  useEffect(() => {
-    if (recordingFlow.recordedVideoBlob && recordingFlow.recordedScreenBlob && 
-        recordingFlow.flowState !== "analyzing" && recordingFlow.flowState !== "results_ready") {
-      console.log('Both recordings complete, starting analysis...');
-      recordingFlow.setFlowState("analyzing");
-      analyzeVideo(recordingFlow.recordedVideoBlob);
-    }
-  }, [recordingFlow.recordedVideoBlob, recordingFlow.recordedScreenBlob, recordingFlow.flowState]);
-
-  const analyzeVideo = async (videoBlob: Blob) => {
+  // Memoize analyzeVideo to prevent useEffect dependency issues
+  const analyzeVideo = useCallback(async (videoBlob: Blob) => {
     recordingFlow.setIsAnalyzingBackend(true);
     recordingFlow.setErrorMessage(null);
     
@@ -95,7 +59,7 @@ export default function Home() {
     
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', body: formData });
+      const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', body: formData });
       if (!response.ok) {
         const errData = await response.json();
         throw new Error(errData.detail?.message || 'Analysis server error.');
@@ -116,20 +80,50 @@ const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', b
     } finally {
       recordingFlow.setIsAnalyzingBackend(false);
     }
-  };
+  }, [recordingFlow, settings]);
 
-  const handleReset = () => {
+  // Handle video recording completion
+  const handleVideoRecorded = useCallback((blob: Blob) => {
+    recordingFlow.stopCountdown();
+    recordingFlow.setRecordedVideoBlob(blob);
+    
+    if (recordingFlow.selectedGame === 'website_browse') {
+      if (recordingFlow.recordedScreenBlob) {
+        recordingFlow.setFlowState("analyzing");
+        analyzeVideo(blob);
+      }
+    } else {
+      recordingFlow.setFlowState("analyzing");
+      analyzeVideo(blob);
+    }
+  }, [recordingFlow, analyzeVideo]);
+
+  // Handle screen recording completion
+  const handleScreenRecorded = useCallback((blob: Blob) => {
+    console.log('Screen recording completed:', blob.size, 'bytes');
+    recordingFlow.setRecordedScreenBlob(blob);
+  }, [recordingFlow]);
+
+  // Auto-start analysis when both recordings are ready
+  useEffect(() => {
+    if (recordingFlow.recordedVideoBlob && recordingFlow.recordedScreenBlob && 
+        recordingFlow.flowState !== "analyzing" && recordingFlow.flowState !== "results_ready") {
+      console.log('Both recordings complete, starting analysis...');
+      recordingFlow.setFlowState("analyzing");
+      analyzeVideo(recordingFlow.recordedVideoBlob);
+    }
+  }, [recordingFlow, recordingFlow.recordedVideoBlob, recordingFlow.recordedScreenBlob, recordingFlow.flowState, recordingFlow.setFlowState, analyzeVideo]);
+
+  const handleReset = useCallback(() => {
     recordingFlow.resetFlow();
     gameEvents.resetGameEvents();
     websiteSession.cleanup();
-  };
+  }, [recordingFlow, gameEvents, websiteSession]);
 
   const PageHeader = () => {
-    const { toggleSidebar } = useSidebar();
     const isActiveSession = recordingFlow.flowState === 'game_active_recording' || recordingFlow.flowState === 'website_browsing_recording';
     return (
       <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3">
-        {!isActiveSession && <SidebarTrigger />}
         <Separator orientation="vertical" className={`mr-2 h-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
         <div className="text-lg md:text-2xl font-bold">FaceIt Analysis</div>
         <div className="ml-auto text-sm text-muted-foreground capitalize hidden sm:block">
@@ -236,7 +230,7 @@ const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', b
                         <p>• The website has opened in a new tab</p>
                         <p>• Your facial expressions are being recorded</p>
                         <p>• Your screen activity is also being captured</p>
-                        <p>• Click "Stop Recording" when you're finished browsing</p>
+                        <p>• Click &ldquo;Stop Recording&rdquo; when you&rsquo;re finished browsing</p>
                       </div>
                       <div className="text-xs text-muted-foreground">
                         URL: {websiteSession.websiteUrl}
