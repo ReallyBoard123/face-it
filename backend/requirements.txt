@@ -1,21 +1,21 @@
 # Core dependencies
-fastapi
-uvicorn
-python-multipart
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.9
 
 # Data processing
 numpy==1.23.5
-pandas
+pandas==2.0.3
 scipy==1.10.1
 
 # Computer vision
-opencv-python
-Pillow
+opencv-python==4.8.1.78
+Pillow==10.0.1
 
-# CPU-optimized PyTorch (instead of default)
+# Explicitly install CPU-optimized PyTorch using an extra index URL
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.0.1+cpu
 torchvision==0.15.2+cpu
---find-links https://download.pytorch.org/whl/torch_stable.html
 
 # Facial expression analysis
-py-feat
+py-feat==0.6.2

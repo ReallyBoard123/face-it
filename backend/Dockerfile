@@ -1,36 +1,50 @@
-# Use a single stage for simplicity and reliability
-FROM python:3.10-slim
+# --- Build Stage ---
+# Use a full Python image to build dependencies, then discard it.
+FROM python:3.10-slim as builder
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install build tools
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 WORKDIR /app
 
-# Install system dependencies
+# Copy and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# --- Final Stage ---
+# Start from a clean, slim image for the final product
+FROM python:3.10-slim
+
+# Create a non-root user to run the application for better security
+RUN useradd --create-home --shell /bin/bash appuser
+
+WORKDIR /app
+
+# Install only necessary runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install them to the user directory.
-# This ensures packages AND downloaded models are in one place: /root/.local
-COPY requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Copy installed Python packages from the builder stage
+COPY --from=builder /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 
-# Pre-download the py-feat models. This will also place them in /root/.local
-RUN python -c "from feat import Detector; Detector()"
+# Copy only the necessary application files
+COPY app.py .
+COPY facial_expression_recognizer.py .
 
-# Add the user's local binary directory to the system's PATH
-ENV PATH=/root/.local/bin:$PATH
+# Change ownership of the app directory to the non-root user
+RUN chown -R appuser:appuser /app
 
-# Set PyTorch to use CPU optimizations and suppress NNPACK warnings
-ENV OMP_NUM_THREADS=1
-ENV PYTORCH_DISABLE_CUDA_MEM_EFFICIENT_ATTENTION=1
-ENV NNPACK_BACKEND=disabled
+# Switch to the non-root user
+USER appuser
 
-# Copy the rest of your application code
-COPY . .
-
-# Expose the port the app runs on
+# Expose the port
 EXPOSE 8000
 
-# Command to run the application
+# Run the application
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
