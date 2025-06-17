@@ -15,7 +15,6 @@ const BIRD_WIDTH = 34;
 const BIRD_HEIGHT = 24;
 const BIRD_X_POSITION = 80; // Bird's horizontal position
 const PIPE_WIDTH = 52;
-const PIPE_IMAGE_HEIGHT = 320; // Actual height of the pipe.png image
 const PIPE_GAP = 120; // Gap between top and bottom pipes
 const GRAVITY = 0.5;
 const JUMP_STRENGTH = -8; // How high the bird jumps
@@ -30,6 +29,13 @@ const PIPE_IMAGE_SRC = '/assets/pipe.png';
 
 // --- Types & Interfaces ---
 type GameStateType = 'start' | 'playing' | 'over';
+
+interface GameEventData {
+  score?: number;
+  finalScore?: number;
+  [key: string]: unknown;
+}
+
 interface PipeStateType {
   id: string; // Use string for unique ID (e.g., timestamp + random)
   x: number;
@@ -38,7 +44,7 @@ interface PipeStateType {
 }
 
 interface FlappyBirdGameProps {
-  onGameEvent?: (event: { type: string; data: any; timestamp: number }) => void;
+  onGameEvent?: (event: { type: string; data: GameEventData; timestamp: number }) => void;
   onGameComplete?: (stats: { score: number }) => void; // Added for potential future use
 }
 
@@ -164,7 +170,7 @@ export default function FlappyBirdGame({ onGameEvent, onGameComplete }: FlappyBi
   const gameAreaRef = useRef<HTMLDivElement>(null); // Ref for the game area div
   const gameStartTimeRef = useRef<number | null>(null); // Ref for game start time
 
-  const emitGameEvent = useCallback((type: string, data: any) => {
+  const emitGameEvent = useCallback((type: string, data: GameEventData) => {
     if (onGameEvent && gameStartTimeRef.current) {
       const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
       setTimeout(() => {
@@ -282,7 +288,7 @@ export default function FlappyBirdGame({ onGameEvent, onGameComplete }: FlappyBi
 
       // Pipe movement, scoring, and collision
       setPipes(prevPipes => {
-        let newPipes = prevPipes.map(pipe => ({ ...pipe, x: pipe.x - PIPE_SPEED }));
+        const newPipes = prevPipes.map(pipe => ({ ...pipe, x: pipe.x - PIPE_SPEED }));
         let scoreChanged = false;
         let currentScore = score;
 
@@ -293,7 +299,6 @@ export default function FlappyBirdGame({ onGameEvent, onGameComplete }: FlappyBi
             scoreChanged = true;
           }
 
-          const birdRect = { x: BIRD_X_POSITION, y: birdY, width: BIRD_WIDTH, height: BIRD_HEIGHT };
           const pipeRightEdge = pipe.x + PIPE_WIDTH;
 
           if (BIRD_X_POSITION + BIRD_WIDTH > pipe.x && BIRD_X_POSITION < pipeRightEdge) {

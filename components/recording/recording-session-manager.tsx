@@ -13,6 +13,11 @@ import { Video, Target, Gamepad2, Globe } from 'lucide-react';
 type GameType = "flappy_bird" | "stress_click" | "website_browse";
 type GameFlowState = "idle" | "permissions_pending" | "permissions_denied" | "ready_to_start" | "game_active_recording" | "website_browsing_recording" | "analyzing" | "results_ready";
 
+interface GameEventData {
+  action?: string;
+  [key: string]: unknown;
+}
+
 interface RecordingSessionManagerProps {
   // State from hooks
   flowState: GameFlowState;
@@ -31,7 +36,7 @@ interface RecordingSessionManagerProps {
   // Event handlers
   onVideoRecorded: (blob: Blob) => void;
   onScreenRecorded: (blob: Blob) => void;
-  onGameEvent: (event: { type: string; data: any; timestamp: number }) => void;
+  onGameEvent: (event: { type: string; data: GameEventData; timestamp: number }) => void;
   
   // Website session data
   websiteUrl: string;
@@ -107,6 +112,28 @@ export function RecordingSessionManager({
     setIsScreenRecording(false);
   }, [setIsScreenRecording]);
 
+  const handleStopWebsiteBrowsing = useCallback(() => {
+    if (flowState !== "website_browsing_recording") return;
+    
+    window.removeEventListener('beforeunload', handleStopWebsiteBrowsing);
+    closeWebsiteTab();
+
+    const endTime = gameStartTimeRef.current ? (Date.now() - gameStartTimeRef.current) / 1000 : 0;
+    onGameEvent({
+      type: 'website_interaction',
+      data: { action: 'Finished browsing session' },
+      timestamp: endTime
+    });
+
+    // Stop both recordings
+    if (videoRecorderRef.current) {
+      videoRecorderRef.current.stopRecording();
+    }
+    if (screenRecorderRef.current) {
+      screenRecorderRef.current.stopRecording();
+    }
+  }, [flowState, closeWebsiteTab, gameStartTimeRef, onGameEvent]);
+
   const startWebsiteBrowsingSession = useCallback(async () => {
     if (!videoRecorderRef.current) {
       setErrorMessage("Video recorder not ready.");
@@ -148,34 +175,13 @@ export function RecordingSessionManager({
       });
 
       window.addEventListener('beforeunload', handleStopWebsiteBrowsing);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Website browsing start failed:", err);
-      setErrorMessage(err instanceof Error ? err.message : "Could not start website browsing session.");
+      const errorMessage = err instanceof Error ? err.message : "Could not start website browsing session.";
+      setErrorMessage(errorMessage);
       setFlowState("ready_to_start");
     }
-  }, [websiteUrl, isValidUrl, openWebsiteTab, gameStartTimeRef, setFlowState, onGameEvent, startTabMonitoring, setErrorMessage]);
-
-  const handleStopWebsiteBrowsing = useCallback(() => {
-    if (flowState !== "website_browsing_recording") return;
-    
-    window.removeEventListener('beforeunload', handleStopWebsiteBrowsing);
-    closeWebsiteTab();
-
-    const endTime = gameStartTimeRef.current ? (Date.now() - gameStartTimeRef.current) / 1000 : 0;
-    onGameEvent({
-      type: 'website_interaction',
-      data: { action: 'Finished browsing session' },
-      timestamp: endTime
-    });
-
-    // Stop both recordings
-    if (videoRecorderRef.current) {
-      videoRecorderRef.current.stopRecording();
-    }
-    if (screenRecorderRef.current) {
-      screenRecorderRef.current.stopRecording();
-    }
-  }, [flowState, closeWebsiteTab, gameStartTimeRef, onGameEvent]);
+  }, [websiteUrl, isValidUrl, openWebsiteTab, gameStartTimeRef, setFlowState, onGameEvent, startTabMonitoring, setErrorMessage, handleStopWebsiteBrowsing]);
 
   const handleStartGameAndRecording = async () => {
     if (!videoRecorderRef.current) {
@@ -217,7 +223,7 @@ export function RecordingSessionManager({
           screenRecorderRef.current.stopRecording();
         }
       }, 30000);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Recording start failed:", err);
       setErrorMessage("Could not start recording.");
       setFlowState("ready_to_start");
@@ -303,7 +309,6 @@ export function RecordingSessionManager({
           flowState={flowState}
           countdown={countdown}
           isScreenRecording={isScreenRecording}
-          websiteUrl={websiteUrl}
           websiteTabRef={websiteTabRef}
           errorMessage={errorMessage}
           onRequestPermissions={requestWebcamPermissions}

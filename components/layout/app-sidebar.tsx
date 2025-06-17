@@ -22,15 +22,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+interface Settings {
+  frameSkip: number;
+  analysisType: string;
+  visualizationStyle: string;
+  detectionThreshold: number;
+  batchSize: number;
+}
+
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
-  settings: {
-    frameSkip: number;
-    analysisType: string;
-    visualizationStyle: string;
-    detectionThreshold: number;
-    batchSize: number;
-  };
-  onSettingsChange: (settings: any) => void;
+  settings: Settings;
+  onSettingsChange: (settings: Settings) => void;
 }
 
 export function AppSidebar({ 
@@ -40,7 +42,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { setOpenMobile } = useSidebar();
 
-  const updateSetting = (key: string, value: any) => {
+  const updateSetting = (key: keyof Settings, value: string | number) => {
     onSettingsChange({ ...settings, [key]: value });
   };
 

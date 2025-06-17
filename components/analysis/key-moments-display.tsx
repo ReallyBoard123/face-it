@@ -1,5 +1,6 @@
 // components/analysis/key-moments-display.tsx
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, Zap, Trophy, Smile, Meh, Frown, ImageOff, Eye, EyeOff } from 'lucide-react';
 
@@ -98,12 +99,14 @@ export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
                   </CardHeader>
                   <CardContent className="p-0 flex flex-col text-xs">
                     {moment.faceFrame ? (
-                      <div className="aspect-video bg-muted border-t">
-                        <img
+                      <div className="aspect-video bg-muted border-t relative">
+                        <Image
                           src={moment.faceFrame.startsWith('data:') ? moment.faceFrame : `data:image/jpeg;base64,${moment.faceFrame}`}
                           alt={`Face at ${moment.timestamp.toFixed(1)}s`}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
                           loading="lazy"
+                          unoptimized
                         />
                       </div>
                     ) : (
@@ -113,12 +116,14 @@ export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
                        </div>
                     )}
                     {moment.gameFrame ? (
-                       <div className="aspect-video bg-muted border-t">
-                        <img
+                       <div className="aspect-video bg-muted border-t relative">
+                        <Image
                           src={moment.gameFrame.startsWith('data:') ? moment.gameFrame : `data:image/jpeg;base64,${moment.gameFrame}`}
                           alt={`Game screen at ${moment.timestamp.toFixed(1)}s`}
-                          className="w-full h-full object-contain" // object-contain might be better for game screens
+                          fill
+                          className="object-contain" // object-contain might be better for game screens
                           loading="lazy"
+                          unoptimized
                         />
                        </div>
                     ) : (

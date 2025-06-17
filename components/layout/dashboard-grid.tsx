@@ -1,32 +1,56 @@
-import { useState, useMemo } from 'react'; // Added useMemo
+import { useMemo } from 'react'; // Removed unused useState
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmotionTimeline } from '../analysis/emotional-timeline';
 import { AuHeatmap } from '../analysis/au-heatmap';
 import { EmotionDistribution } from '../analysis/emotion-distribution';
 import { KeyMomentsDisplay, KeyMoment } from '../analysis/key-moments-display'; // Added KeyMomentsDisplay
-import { Progress } from '@/components/ui/progress';
 import { Activity, TrendingUp, Users, Clock } from 'lucide-react';
 
-interface DashboardGridProps {
-  settings: {
-    frameSkip: number;
-    analysisType: string;
-    visualizationStyle: string;
-    detectionThreshold: number;
-    batchSize: number;
+interface Settings {
+  frameSkip: number;
+  analysisType: string;
+  visualizationStyle: string;
+  detectionThreshold: number;
+  batchSize: number;
+}
+
+interface GameEvent {
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: number;
+}
+
+interface EmotionStats {
+  mean: number;
+  [key: string]: unknown;
+}
+
+interface AnalysisResults {
+  data?: {
+    summary?: {
+      faces_detected?: number;
+      total_frames?: number;
+      emotions?: {
+        statistics?: Record<string, EmotionStats>;
+      };
+      emotional_key_moments?: KeyMoment[];
+    };
   };
-  initialResults?: any;
+}
+
+interface DashboardGridProps {
+  settings: Settings;
+  initialResults?: AnalysisResults;
   videoBlob?: Blob;
-  gameEvents?: Array<{ type: string; data: any; timestamp: number }>;
-  gameKeyMoments?: KeyMoment[]; // Changed to use KeyMoment type directly
+  gameEvents?: GameEvent[];
+  gameKeyMoments?: KeyMoment[];
 }
 
 export function DashboardGrid({ 
   settings, 
   initialResults, 
-  videoBlob: initialVideoBlob, // Not used directly for re-analysis here, parent handles it
   gameEvents = [],
-  gameKeyMoments = [], // Added prop
+  gameKeyMoments = [],
 }: DashboardGridProps) {
   // initialResults contains data from the parent after analysis is complete
   const analysisResults = initialResults || null;
@@ -55,17 +79,17 @@ export function DashboardGrid({
     
     const dominantEmotionEntry = Object.entries(emotions)
       .filter(([key]) => key !== 'neutral') // Exclude neutral for dominance
-      .sort(([,a]: [string, any], [,b]: [string, any]) => b.mean - a.mean)[0];
+      .sort(([,a], [,b]) => (b as EmotionStats).mean - (a as EmotionStats).mean)[0];
     
     const totalActivity = Object.values(emotions)
-      .reduce((sum: number, stat: any) => sum + stat.mean, 0);
+      .reduce((sum: number, stat) => sum + (stat as EmotionStats).mean, 0);
 
     return {
       facesDetected: summary.faces_detected || 0,
       totalFrames: summary.total_frames || 0,
       dominantEmotion: dominantEmotionEntry ? {
         name: dominantEmotionEntry[0],
-        value: (dominantEmotionEntry[1] as any).mean * 100
+        value: (dominantEmotionEntry[1] as EmotionStats).mean * 100
       } : null,
       activityLevel: Math.min(100, totalActivity * 100), // This is a rough metric
       gameEventCount: gameEvents.filter(e => e.type !== 'target_spawn' && e.type !== 'target_miss').length // Filter out noisy events if needed

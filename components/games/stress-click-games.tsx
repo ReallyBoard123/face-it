@@ -30,9 +30,23 @@ interface GameStats {
   accuracy: number;
 }
 
+interface GameEventData {
+  targetId?: string;
+  currentScore?: number;
+  difficulty?: DifficultySetting;
+  duration?: number;
+  reactionTimeMs?: number;
+  points?: number;
+  from?: number;
+  to?: number;
+  direction?: 'up' | 'down';
+  newDifficultySettings?: DifficultySetting;
+  [key: string]: unknown;
+}
+
 interface StressClickGameProps {
   duration?: number;
-  onGameEvent?: (event: { type: string; data: any; timestamp: number }) => void;
+  onGameEvent?: (event: { type: string; data: GameEventData; timestamp: number }) => void;
   onGameComplete?: (stats: GameStats) => void;
 }
 
@@ -46,6 +60,8 @@ const DIFFICULTY_LEVELS_CONFIG: DifficultySetting[] = [
 const MAX_DIFFICULTY_LEVEL = DIFFICULTY_LEVELS_CONFIG.length;
 const DEFAULT_GAME_DURATION = 60;
 
+// Define point thresholds for each level (progressive difficulty)  
+const LEVEL_THRESHOLDS = [0, 8, 28, 48, 70]; // Level 1: 0-7, Level 2: 8-19, Level 3: 20-37, Level 4: 38-61, Level 5: 62+
 
 export const StressClickGame: React.FC<StressClickGameProps> = ({
   duration = DEFAULT_GAME_DURATION,
@@ -71,10 +87,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
   const targetRemovalTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const gameStartTimeRef = useRef<number | null>(null);
 
-  // Memoized functions (emitGameEvent, calculateLevelFromScore, etc. from previous version)
-  // Ensure their dependencies are correct.
-
-  const emitGameEvent = useCallback((type: string, data: any) => {
+  const emitGameEvent = useCallback((type: string, data: GameEventData) => {
     if (onGameEvent && gameStartTimeRef.current) {
       const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
       setTimeout(() => {
@@ -83,8 +96,6 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     }
   }, [onGameEvent]);
 
-  // Define point thresholds for each level (progressive difficulty)  
-  const LEVEL_THRESHOLDS = [0, 8, 28, 48, 70]; // Level 1: 0-7, Level 2: 8-19, Level 3: 20-37, Level 4: 38-61, Level 5: 62+
   const calculateLevelFromScore = useCallback((score: number): number => {
     // Find the highest level threshold that the score exceeds
     for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -223,7 +234,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     }
 
     setTargets(prev => [...prev, newTarget]);
-    emitGameEvent('target_spawn', { targetId: id, difficulty: stats.level, position: {x,y}, size });
+    emitGameEvent('target_spawn', { targetId: id, difficulty: settings, position: {x,y}, size });
     const removalTimer = setTimeout(() => handleTargetMiss(id), settings.displayTime);
     targetRemovalTimersRef.current.set(id, removalTimer);
 
@@ -302,8 +313,11 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
         clearInterval(gameTimerRef.current);
         gameTimerRef.current = null;
       }
-      targetRemovalTimersRef.current.forEach(clearTimeout);
+      // Create a copy of the current map to avoid ref issues
+      const currentTimers = new Map(targetRemovalTimersRef.current);
+      currentTimers.forEach(clearTimeout);
       targetRemovalTimersRef.current.clear();
+      
       targets.forEach(t => {
         if (t.moveIntervalId) clearInterval(t.moveIntervalId);
       });
@@ -318,7 +332,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
         spawnTimerRef.current = null;
       }
     };
-  }, [gameActive, performSpawnTarget]); // performSpawnTarget IS a dependency
+  }, [gameActive, performSpawnTarget, currentDifficultySetting.spawnTime]); // Added missing dependencies
 
   // Effect for level and difficulty changes
   useEffect(() => {
@@ -346,7 +360,9 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
       console.log('[StressClickGame] Component Unmounting. Clearing all timers.');
       if (gameTimerRef.current) clearInterval(gameTimerRef.current);
       if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
-      targetRemovalTimersRef.current.forEach(clearTimeout);
+      // Create a copy of the current map to avoid ref issues
+      const currentTimers = new Map(targetRemovalTimersRef.current);
+      currentTimers.forEach(clearTimeout);
       targets.forEach(t => { if (t.moveIntervalId) clearInterval(t.moveIntervalId); });
     };
   }, []); // Empty: runs on unmount only

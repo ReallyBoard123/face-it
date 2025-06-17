@@ -11,7 +11,6 @@ interface SessionStatusProps {
   flowState: GameFlowState;
   countdown: number;
   isScreenRecording: boolean;
-  websiteUrl: string;
   websiteTabRef: React.MutableRefObject<Window | null>;
   errorMessage: string | null;
   onRequestPermissions: () => void;
@@ -25,7 +24,6 @@ export function SessionStatus({
   flowState,
   countdown,
   isScreenRecording,
-  websiteUrl,
   websiteTabRef,
   errorMessage,
   onRequestPermissions,
