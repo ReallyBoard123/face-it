@@ -3,7 +3,8 @@
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ExternalLink } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { ExternalLink, Globe } from 'lucide-react';
 
 interface WebsiteUrlInputProps {
   websiteUrl: string;
@@ -12,24 +13,36 @@ interface WebsiteUrlInputProps {
 
 export function WebsiteUrlInput({ websiteUrl, onUrlChange }: WebsiteUrlInputProps) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor="website-url" className="text-sm font-medium">
-        Website URL
-      </Label>
-      <div className="relative">
-        <Input
-          id="website-url"
-          type="url"
-          placeholder="Enter website URL (e.g., google.com)"
-          value={websiteUrl}
-          onChange={(e) => onUrlChange(e.target.value)}
-          className="pr-10"
-        />
-        <ExternalLink className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <Card variant="white" className="p-4">
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 justify-center">
+          <Globe className="h-5 w-5 text-black" />
+          <Label htmlFor="website-url" className="neo-text-label text-black text-center">
+            WEBSITE URL
+          </Label>
+          <Globe className="h-5 w-5 text-black" />
+        </div>
+        
+        <div className="relative">
+          <Input
+            id="website-url"
+            type="url"
+            placeholder="ENTER WEBSITE URL (e.g., google.com)"
+            value={websiteUrl}
+            onChange={(e) => onUrlChange(e.target.value)}
+            className="pr-12 text-center font-bold uppercase"
+          />
+          <ExternalLink className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-black/70" />
+        </div>
+        
+        <Card variant="cyan" className="p-3">
+          <div className="text-xs font-bold text-black text-center space-y-1 uppercase tracking-wide">
+            <p>🌐 Website opens in new tab</p>
+            <p>📹 Face & screen recorded</p>
+            <p>⚡ Pure browsing chaos!</p>
+          </div>
+        </Card>
       </div>
-      <p className="text-xs text-muted-foreground">
-        The website will open in a new tab. Both your face and screen will be recorded.
-      </p>
-    </div>
+    </Card>
   );
 }

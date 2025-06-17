@@ -2,13 +2,13 @@
 'use client';
 
 import React, { useRef, useCallback, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { VideoRecorder, VideoRecorderHandles } from '@/components/video/video-recorder';
 import { ScreenRecorder, ScreenRecorderHandles } from '@/components/video/screen-recorder';
 import { GameSelection } from '@/components/forms/game-selection';
 import { WebsiteUrlInput } from '@/components/forms/website-url-input';
 import { SessionStatus } from '@/components/recording/session-status';
-import { Video, Target, Gamepad2, Globe } from 'lucide-react';
+import { Video, Target, Gamepad2, Globe, Sparkles, Zap } from 'lucide-react';
 
 type GameType = "flappy_bird" | "stress_click" | "website_browse";
 type GameFlowState = "idle" | "permissions_pending" | "permissions_denied" | "ready_to_start" | "game_active_recording" | "website_browsing_recording" | "analyzing" | "results_ready";
@@ -125,7 +125,6 @@ export function RecordingSessionManager({
       timestamp: endTime
     });
 
-    // Stop both recordings
     if (videoRecorderRef.current) {
       videoRecorderRef.current.stopRecording();
     }
@@ -151,15 +150,12 @@ export function RecordingSessionManager({
     gameStartTimeRef.current = Date.now();
 
     try {
-      // 1. Start webcam recording first
       await videoRecorderRef.current.startRecording();
       
-      // 2. Get screen recording permissions (shows dialog on current tab)
       if (screenRecorderRef.current) {
         await screenRecorderRef.current.startRecording();
       }
       
-      // 3. Now open the website tab (user can switch after permissions granted)
       const normalizedUrl = openWebsiteTab(websiteUrl.trim());
       
       setFlowState("website_browsing_recording");
@@ -217,7 +213,6 @@ export function RecordingSessionManager({
       setFlowState("game_active_recording");
       startCountdown();
 
-      // Auto-stop screen recording when game ends (30 seconds)
       setTimeout(() => {
         if (screenRecorderRef.current) {
           screenRecorderRef.current.stopRecording();
@@ -232,64 +227,69 @@ export function RecordingSessionManager({
 
   const getSessionTitle = () => {
     switch(selectedGame) {
-      case 'stress_click': return 'Stress Click Game';
-      case 'flappy_bird': return 'Flappy Bird Game';
-      case 'website_browse': return 'Website Browsing';
-      default: return 'Session';
+      case 'stress_click': return 'STRESS CLICK CHAOS';
+      case 'flappy_bird': return 'FLAPPY BIRD MADNESS';
+      case 'website_browse': return 'WEBSITE ADVENTURE';
+      default: return 'RECORDING SESSION';
     }
   };
 
   const getSessionIcon = () => {
     switch(selectedGame) {
-      case 'stress_click': return <Target className="h-5 w-5 md:h-6 md:w-6" />;
-      case 'flappy_bird': return <Gamepad2 className="h-5 w-5 md:h-6 md:w-6" />;
-      case 'website_browse': return <Globe className="h-5 w-5 md:h-6 md:w-6" />;
-      default: return <Video className="h-5 w-5 md:h-6 md:w-6" />;
+      case 'stress_click': return <Target className="h-6 w-6" />;
+      case 'flappy_bird': return <Gamepad2 className="h-6 w-6" />;
+      case 'website_browse': return <Globe className="h-6 w-6" />;
+      default: return <Video className="h-6 w-6" />;
     }
   };
 
+  // Card variant logic removed as it was unused
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3 md:pb-4">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-          {getSessionIcon()} Recording Setup
+    <>
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-3 text-black">
+          {getSessionIcon()}
+          <Sparkles className="h-5 w-5" />
+          RECORDING SETUP
+          <Zap className="h-5 w-5" />
         </CardTitle>
         {(flowState !== "game_active_recording" && flowState !== "website_browsing_recording") && (
-          <CardDescription className="text-xs md:text-sm">
+          <CardDescription className="text-black font-bold uppercase tracking-wide">
             Camera and screen recording for {getSessionTitle()}.
           </CardDescription>
         )}
       </CardHeader>
-      <CardContent className="flex-grow flex flex-col items-center justify-center pt-0 space-y-4">
+      
+      <CardContent className="flex-grow flex flex-col items-center justify-center pt-4 space-y-6">
         {/* Webcam Section */}
-        <div className="w-full max-w-md">
-          <div className="w-full aspect-[16/9] bg-muted rounded-md overflow-hidden mb-3">
-            <VideoRecorder 
-              ref={videoRecorderRef} 
-              onVideoRecorded={onVideoRecorded} 
-              onRecordingStopped={flowState === "website_browsing_recording" ? handleStopWebsiteBrowsing : undefined}
-              isAnalyzing={isAnalyzingBackend || flowState === "analyzing"} 
-              recordingDuration={selectedGame === 'website_browse' ? undefined : 30}
-              showControls={flowState === "website_browsing_recording"}
-            />
-          </div>
+        <div className="w-full max-w-lg">
+          <VideoRecorder 
+            ref={videoRecorderRef} 
+            onVideoRecorded={onVideoRecorded} 
+            onRecordingStopped={flowState === "website_browsing_recording" ? handleStopWebsiteBrowsing : undefined}
+            isAnalyzing={isAnalyzingBackend || flowState === "analyzing"} 
+            recordingDuration={selectedGame === 'website_browse' ? undefined : 30}
+            showControls={flowState === "website_browsing_recording"}
+          />
 
-          {/* Screen Recording Section - Always show when not actively recording */}
+          {/* Screen Recording Section */}
           {(flowState === "ready_to_start" || flowState === "idle" || flowState === "permissions_denied") && (
-            <ScreenRecorder
-              ref={screenRecorderRef}
-              onScreenRecorded={onScreenRecorded}
-              recordingMode={selectedGame === 'website_browse' ? 'any_screen' : 'current_tab'}
-              isRecording={isScreenRecording}
-              onRecordingStarted={handleScreenRecordingStarted}
-              onRecordingStopped={handleScreenRecordingStopped}
-            />
+            <div className="mt-4">
+              <ScreenRecorder
+                ref={screenRecorderRef}
+                onScreenRecorded={onScreenRecorded}
+                recordingMode={selectedGame === 'website_browse' ? 'any_screen' : 'current_tab'}
+                isRecording={isScreenRecording}
+                onRecordingStarted={handleScreenRecordingStarted}
+                onRecordingStopped={handleScreenRecordingStopped}
+              />
+            </div>
           )}
         </div>
         
         {/* Game Selection and URL Input */}
         {(flowState === "ready_to_start" || flowState === "idle" || flowState === "permissions_denied") && (
-          <div className="mt-2 w-full max-w-md space-y-4">
+          <div className="w-full max-w-lg space-y-6">
             <GameSelection 
               selectedGame={selectedGame} 
               onGameChange={setSelectedGame} 
@@ -318,6 +318,6 @@ export function RecordingSessionManager({
           getSessionTitle={getSessionTitle}
         />
       </CardContent>
-    </Card>
+    </>
   );
 }

@@ -1,10 +1,10 @@
-import { useMemo } from 'react'; // Removed unused useState
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmotionTimeline } from '../analysis/emotional-timeline';
 import { AuHeatmap } from '../analysis/au-heatmap';
 import { EmotionDistribution } from '../analysis/emotion-distribution';
-import { KeyMomentsDisplay, KeyMoment } from '../analysis/key-moments-display'; // Added KeyMomentsDisplay
-import { Activity, TrendingUp, Users, Clock } from 'lucide-react';
+import { KeyMomentsDisplay, KeyMoment } from '../analysis/key-moments-display';
+import { TrendingUp, Users, Clock, Sparkles, Zap, Target, Trophy } from 'lucide-react';
 
 interface Settings {
   frameSkip: number;
@@ -66,12 +66,17 @@ export function DashboardGrid({
   gameEvents = [],
   gameKeyMoments = [],
 }: DashboardGridProps) {
-  // initialResults contains data from the parent after analysis is complete
   const analysisResults = initialResults || null;
-  // isAnalyzing state is also managed by parent, this component just displays results
 
   const renderVisualization = () => {
-    if (!analysisResults?.data) return <div className="flex items-center justify-center h-full text-muted-foreground">No analysis data to display.</div>;
+    if (!analysisResults?.data) return (
+      <div className="flex items-center justify-center h-full text-black">
+        <Card variant="white" className="p-8 text-center">
+          <Sparkles className="h-12 w-12 mx-auto mb-4 text-black" />
+          <div className="neo-text-heading text-black">NO DATA TO DISPLAY</div>
+        </Card>
+      </div>
+    );
 
     switch (settings.visualizationStyle) {
       case 'timeline':
@@ -92,7 +97,7 @@ export function DashboardGrid({
     const emotions = summary.emotions?.statistics || {};
     
     const dominantEmotionEntry = Object.entries(emotions)
-      .filter(([key]) => key !== 'neutral') // Exclude neutral for dominance
+      .filter(([key]) => key !== 'neutral')
       .sort(([,a], [,b]) => (b as EmotionStats).mean - (a as EmotionStats).mean)[0];
     
     const totalActivity = Object.values(emotions)
@@ -105,8 +110,8 @@ export function DashboardGrid({
         name: dominantEmotionEntry[0],
         value: (dominantEmotionEntry[1] as EmotionStats).mean * 100
       } : null,
-      activityLevel: Math.min(100, totalActivity * 100), // This is a rough metric
-      gameEventCount: gameEvents.filter(e => e.type !== 'target_spawn' && e.type !== 'target_miss').length // Filter out noisy events if needed
+      activityLevel: Math.min(100, totalActivity * 100),
+      gameEventCount: gameEvents.filter(e => e.type !== 'target_spawn' && e.type !== 'target_miss').length
     };
   };
 
@@ -114,96 +119,103 @@ export function DashboardGrid({
 
   const combinedKeyMoments = useMemo(() => {
     const backendMoments: KeyMoment[] = analysisResults?.data?.summary?.emotional_key_moments || [];
-    // gameKeyMoments is already in KeyMoment[] format from app/page.tsx
     return [...backendMoments, ...gameKeyMoments].sort((a, b) => a.timestamp - b.timestamp);
   }, [analysisResults, gameKeyMoments]);
 
+  const getVisualizationTitle = () => {
+    const baseTitle = settings.visualizationStyle === 'timeline' ? 'EMOTION TIMELINE' :
+                     settings.visualizationStyle === 'heatmap' ? 'ACTION UNIT HEATMAP' :
+                     'EMOTION DISTRIBUTION';
+    
+    return gameEvents.length > 0 && settings.visualizationStyle === 'timeline' 
+      ? `${baseTitle} + GAME CHAOS!` 
+      : baseTitle;
+  };
+
+  const metricCards = [
+    {
+      icon: Users,
+      value: metrics?.facesDetected || 0,
+      label: 'FACES DETECTED',
+      variant: 'blue' as const,
+    },
+    {
+      icon: Clock,
+      value: metrics?.totalFrames || 0,
+      label: 'FRAMES ANALYZED',
+      variant: 'green' as const,
+    },
+    {
+      icon: TrendingUp,
+      value: metrics?.dominantEmotion?.name?.toUpperCase() || '-',
+      label: `${metrics?.dominantEmotion?.value?.toFixed(0) || 0}% INTENSITY`,
+      variant: 'purple' as const,
+    },
+    {
+      icon: Target,
+      value: metrics?.gameEventCount || 0,
+      label: 'GAME EVENTS',
+      variant: 'orange' as const,
+    }
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {metrics && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <Users className="h-6 w-6 md:h-8 md:w-8 text-blue-500" />
-                <div>
-                  <p className="text-lg md:text-2xl font-bold">{metrics.facesDetected}</p>
-                  <p className="text-xs text-muted-foreground">Faces Detected</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <Clock className="h-6 w-6 md:h-8 md:w-8 text-green-500" />
-                <div>
-                  <p className="text-lg md:text-2xl font-bold">{metrics.totalFrames}</p>
-                  <p className="text-xs text-muted-foreground">Frames Analyzed</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          {metrics.dominantEmotion ? (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2">
-                  <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
-                  <div>
-                    <p className="text-base md:text-lg font-bold capitalize">{metrics.dominantEmotion.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {metrics.dominantEmotion.value.toFixed(0)}% avg intensity
-                    </p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          {metricCards.map((metric, index) => {
+            const Icon = metric.icon;
+            return (
+              <Card key={index} variant={metric.variant} className="hover:scale-105 transition-transform">
+                <CardContent className="p-6">
+                  <div className="flex items-center space-x-3">
+                    <Icon className="h-8 w-8 md:h-10 md:w-10 text-black" />
+                    <div>
+                      <p className="text-xl md:text-3xl font-black text-black">{metric.value}</p>
+                      <p className="text-xs font-bold text-black/70 uppercase tracking-widest">{metric.label}</p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-             <Card><CardContent className="p-4 flex items-center space-x-2"><TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-muted-foreground" /><div><p className="text-base md:text-lg font-bold">-</p><p className="text-xs text-muted-foreground">Dominant Emotion</p></div></CardContent></Card>
-          )}
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <Activity className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
-                <div>
-                  <p className="text-lg md:text-2xl font-bold">{metrics.gameEventCount}</p>
-                  <p className="text-xs text-muted-foreground">Key Game Events</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       {analysisResults && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base md:text-lg">
-              {settings.visualizationStyle === 'timeline' && 'Emotion Timeline'}
-              {settings.visualizationStyle === 'heatmap' && 'Action Unit Heatmap'}
-              {settings.visualizationStyle === 'distribution' && 'Emotion Distribution'}
-              {gameEvents.length > 0 && settings.visualizationStyle === 'timeline' && (
-                <span className="text-sm font-normal text-muted-foreground ml-2">
-                  with game event markers
-                </span>
-              )}
+        <Card variant="white">
+          <CardHeader className="border-b-4 border-black bg-gradient-to-r from-cyan-400 to-purple-400">
+            <CardTitle className="flex items-center gap-3 text-black">
+              <Zap className="h-6 w-6" />
+              {getVisualizationTitle()}
+              <Zap className="h-6 w-6" />
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="h-80 md:h-96"> {/* Responsive height */}
+          <CardContent className="p-6">
+            <div className="h-80 md:h-96 border-4 border-black shadow-[8px_8px_0px_0px_#000] bg-white p-4">
               {renderVisualization()}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Display Key Moments */}
-      {(analysisResults || gameKeyMoments.length > 0) && ( // Show if there's any moment data
-          <KeyMomentsDisplay moments={combinedKeyMoments} />
+      {/* Key Moments Display */}
+      {(analysisResults || gameKeyMoments.length > 0) && (
+        <Card variant="yellow">
+          <CardHeader className="border-b-4 border-black bg-gradient-to-r from-pink-400 to-orange-400">
+            <CardTitle className="flex items-center gap-3 text-black">
+              <Trophy className="h-6 w-6" />
+              KEY MOMENTS OF CHAOS
+              <Trophy className="h-6 w-6" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="border-4 border-black shadow-[8px_8px_0px_0px_#000] bg-white p-4">
+              <KeyMomentsDisplay moments={combinedKeyMoments} />
+            </div>
+          </CardContent>
+        </Card>
       )}
-      
-      {/* Removed isAnalyzing block as parent page handles this state */}
     </div>
   );
 }

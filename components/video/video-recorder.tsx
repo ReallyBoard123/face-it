@@ -3,7 +3,8 @@
 
 import React, { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Progress } from '@/components/ui/progress';
-import { Square, Circle, Video as VideoIcon } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Square, Circle, Video as VideoIcon, Zap } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface VideoRecorderProps {
@@ -20,7 +21,7 @@ export interface VideoRecorderHandles {
   stopRecording: () => void;
   getStream: () => MediaStream | null;
   requestPermissions: () => Promise<MediaStream | null>;
-  captureFrame: () => string | null; // Added for capturing current frame
+  captureFrame: () => string | null;
 }
 
 interface MediaRecorderErrorEvent extends Event {
@@ -96,7 +97,6 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
             videoRef.current.srcObject = streamToRecord;
         }
 
-        // Use type assertion to handle the mimeType option safely
         const options: MediaRecorderOptions = {};
         const mimeType = 'video/webm;codecs=vp8,opus';
         if (MediaRecorder.isTypeSupported(mimeType)) {
@@ -152,7 +152,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            return canvas.toDataURL('image/jpeg', 0.8); // Use JPEG with quality for smaller size
+            return canvas.toDataURL('image/jpeg', 0.8);
           }
         }
         console.warn("VideoRecorder: Could not capture frame. Video not ready or dimensions are zero.");
@@ -183,7 +183,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
 
     return (
       <div className="h-full w-full flex flex-col">
-        <div className="flex-1 relative bg-muted rounded-lg overflow-hidden aspect-video">
+        <div className="flex-1 relative border-4 border-black shadow-[8px_8px_0px_0px_#000] bg-gradient-to-br from-purple-400 to-cyan-400 overflow-hidden">
           <video
             ref={videoRef}
             autoPlay
@@ -191,39 +191,66 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
             playsInline
             className="w-full h-full object-cover"
           />
+          
           {isRecordingInternal && (
-            <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1">
-              <Circle className="h-2 w-2 fill-current animate-pulse" />
-              <span>{formatTime(recordingTime)}</span>
-            </div>
+            <Card variant="pink" className="absolute top-4 right-4 p-2 animate-pulse">
+              <div className="flex items-center gap-2 text-black font-black text-sm uppercase">
+                <Circle className="h-3 w-3 fill-current" />
+                <span>{formatTime(recordingTime)}</span>
+              </div>
+            </Card>
           )}
+          
           {!stream && !error && !isRecordingInternal && (
-            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-              <VideoIcon className="h-12 w-12" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Card variant="white" className="p-6 text-center">
+                <VideoIcon className="h-16 w-16 mx-auto mb-4 text-black" />
+                <div className="font-black uppercase text-black text-lg">CAMERA READY</div>
+              </Card>
             </div>
           )}
         </div>
 
-        {error && <p className="text-red-500 text-sm mt-2 text-center">{error}</p>}
+        {error && (
+          <Card variant="pink" className="mt-4 p-3">
+            <p className="text-black font-bold text-sm text-center uppercase">{error}</p>
+          </Card>
+        )}
 
         {showControls && (
           <>
             <div className="mt-4">
               <Button
                 onClick={isRecordingInternal ? stopManualRecording : startManualRecording}
-                variant={isRecordingInternal ? "destructive" : "default"}
+                variant={isRecordingInternal ? "destructive" : "success"}
                 className="w-full"
-                disabled={isAnalyzing || (!stream && !isRecordingInternal && !error) } // Disable if no stream and not recording unless there's an error
+                size="lg"
+                disabled={isAnalyzing || (!stream && !isRecordingInternal && !error)}
               >
-                {isRecordingInternal ? <Square className="mr-2 h-4 w-4" /> : <Circle className="mr-2 h-4 w-4" />}
-                {isRecordingInternal ? 'Stop Recording' : 'Start Recording'}
+                {isRecordingInternal ? (
+                  <>
+                    <Square className="mr-3 h-5 w-5" />
+                    STOP RECORDING
+                  </>
+                ) : (
+                  <>
+                    <Circle className="mr-3 h-5 w-5" />
+                    START RECORDING
+                  </>
+                )}
               </Button>
             </div>
+            
             {isAnalyzing && (
-              <div className="mt-2 space-y-1">
-                <p className="text-sm text-center">Analyzing video...</p>
-                <Progress value={undefined} className="h-2 animate-pulse" />
-              </div>
+              <Card variant="orange" className="mt-4 p-4 text-center neo-pulse">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-2 text-black">
+                    <Zap className="h-5 w-5 animate-spin" />
+                    <span className="font-black uppercase text-sm">ANALYZING VIDEO...</span>
+                  </div>
+                  <Progress value={undefined} className="h-3" />
+                </div>
+              </Card>
             )}
           </>
         )}

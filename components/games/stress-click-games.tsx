@@ -2,6 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface Target {
   id: string;
@@ -60,8 +62,7 @@ const DIFFICULTY_LEVELS_CONFIG: DifficultySetting[] = [
 const MAX_DIFFICULTY_LEVEL = DIFFICULTY_LEVELS_CONFIG.length;
 const DEFAULT_GAME_DURATION = 60;
 
-// Define point thresholds for each level (progressive difficulty)  
-const LEVEL_THRESHOLDS = [0, 8, 28, 48, 70]; // Level 1: 0-7, Level 2: 8-19, Level 3: 20-37, Level 4: 38-61, Level 5: 62+
+const LEVEL_THRESHOLDS = [0, 8, 28, 48, 70];
 
 export const StressClickGame: React.FC<StressClickGameProps> = ({
   duration = DEFAULT_GAME_DURATION,
@@ -97,22 +98,17 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
   }, [onGameEvent]);
 
   const calculateLevelFromScore = useCallback((score: number): number => {
-    // Find the highest level threshold that the score exceeds
     for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
       if (score >= LEVEL_THRESHOLDS[i]) {
         return Math.min(i + 1, MAX_DIFFICULTY_LEVEL);
       }
     }
-    return 1; // Default to level 1
+    return 1;
   }, []);
 
   const endGame = useCallback(() => {
-    console.log('[endGame] Called. Setting gameActive to false.');
-    setGameActive(false); // This will trigger the useEffect for gameActive to cleanup timers
+    setGameActive(false);
     
-    // Calculate and emit final stats *after* gameActive is set to false and timers are presumably cleared by useEffect
-    // This might require a slight re-think if emitGameEvent depends on gameActive being true.
-    // For now, let's ensure stats are updated.
     setStats(prev => {
       const finalAccuracy = prev.hits + prev.misses > 0 ? (prev.hits / (prev.hits + prev.misses)) * 100 : 0;
       const finalStats = {
@@ -120,24 +116,22 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
         timeLeft: 0,
         accuracy: finalAccuracy,
       };
-      // emitGameEvent should ideally be called when all state is settled or from a useEffect.
-      // For simplicity here, emitting with potentially slightly stale prev, but finalStats is correct.
+      
       if (onGameEvent && gameStartTimeRef.current) {
-          const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
-          onGameEvent({type: 'game_end', data: finalStats, timestamp });
+        const timestamp = (Date.now() - gameStartTimeRef.current) / 1000;
+        onGameEvent({type: 'game_end', data: finalStats, timestamp });
       }
       if (onGameComplete) {
         onGameComplete(finalStats);
       }
-      setUiMessage(`Game Over! Final Score: ${finalStats.score}`);
+      setUiMessage(`GAME OVER! FINAL SCORE: ${finalStats.score}`);
       return finalStats;
     });
-
-  }, [onGameEvent, onGameComplete]); // Removed stats.score as direct dep to avoid loop with setStats
+  }, [onGameEvent, onGameComplete]);
 
   const updateGameTimer = useCallback(() => {
     setStats(prev => {
-      if (prev.timeLeft <= 1) { // Check if it's about to be 0
+      if (prev.timeLeft <= 1) {
         endGame();
         return { ...prev, timeLeft: 0 };
       }
@@ -148,42 +142,28 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
   const handleTargetMiss = useCallback((targetId: string) => {
     setTargets(prevTargets => prevTargets.filter(t => t.id !== targetId));
     setStats(prev => {
-        // Reduce score by 1 point for every miss (minimum 0)
-        const newScore = Math.max(0, prev.score - 5);
-        emitGameEvent('target_miss', { targetId, currentScore: newScore });
-        return {
-            ...prev,
-            misses: prev.misses + 1,
-            score: newScore
-        };
+      const newScore = Math.max(0, prev.score - 5);
+      emitGameEvent('target_miss', { targetId, currentScore: newScore });
+      return {
+        ...prev,
+        misses: prev.misses + 1,
+        score: newScore
+      };
     });
     targetRemovalTimersRef.current.delete(targetId);
   }, [emitGameEvent]);
 
-
   const performSpawnTarget = useCallback(() => {
-    // This function is now leaner and primarily focuses on spawning one target
-    // and scheduling the *next* call to itself if the game is active.
-    // It relies on the useEffect hook for initial calls and restarts.
-
-    // console.log(`[performSpawnTarget] Called. gameActive: ${gameActive}, Level: ${stats.level}, SpawnTime: ${currentDifficultySetting.spawnTime}`);
-
     if (!gameActive) {
-      // console.log("[performSpawnTarget] Bailing: game not active.");
-      if (spawnTimerRef.current) { // Ensure no rogue timer is left if somehow called when not active
-          clearTimeout(spawnTimerRef.current);
-          spawnTimerRef.current = null;
+      if (spawnTimerRef.current) {
+        clearTimeout(spawnTimerRef.current);
+        spawnTimerRef.current = null;
       }
       return;
     }
+    
     if (!gameAreaRef.current || gameAreaRef.current.clientWidth === 0 || gameAreaRef.current.clientHeight === 0) {
-      // console.warn('[performSpawnTarget] Game area not ready or zero dimensions. Will retry via useEffect if performSpawnTarget identity changes, or if game restarts.');
-      // Don't set a short retry timer here, let the main useEffect handle it or the next scheduled call.
-      // If this was a scheduled call and dimensions became invalid, the loop might pause.
-      // A more robust solution might involve a dedicated "wait for layout" state.
-      // For now, if it fails here, the loop might break until next level change or game restart.
-      // To keep it trying:
-      spawnTimerRef.current = setTimeout(performSpawnTarget, 250); // Quick retry if area not ready
+      spawnTimerRef.current = setTimeout(performSpawnTarget, 250);
       return;
     }
 
@@ -194,16 +174,18 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     const maxY = gameAreaRect.height - size;
 
     if (maxX <= 0 || maxY <= 0) {
-      // console.warn('[performSpawnTarget] No space for target. Retrying in 250ms');
-      spawnTimerRef.current = setTimeout(performSpawnTarget, 250); // Quick retry
+      spawnTimerRef.current = setTimeout(performSpawnTarget, 250);
       return;
     }
 
     const id = `target-${Date.now()}-${Math.random()}`;
     const x = Math.floor(Math.random() * maxX);
     const y = Math.floor(Math.random() * maxY);
-    const hue = 360 - (stats.level * 60);
-    const color = `hsl(${hue}, 70%, 60%)`;
+    
+    // Neobrutalism colors based on level
+    const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899'];
+    const color = colors[stats.level - 1] || colors[colors.length - 1];
+    
     const spawnTime = Date.now();
     const newTarget: Target = { id, x, y, size, color, animation: 'pulse', spawnTime };
 
@@ -238,19 +220,14 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     const removalTimer = setTimeout(() => handleTargetMiss(id), settings.displayTime);
     targetRemovalTimersRef.current.set(id, removalTimer);
 
-    // Schedule the next call to this *current* performSpawnTarget instance
-    // The useEffect will handle clearing this if performSpawnTarget itself changes identity
-    if (gameActive) { // Re-check gameActive before setting timeout
-        // console.log(`[performSpawnTarget] Scheduling next actual target in ${settings.spawnTime}ms.`);
-        spawnTimerRef.current = setTimeout(performSpawnTarget, settings.spawnTime);
+    if (gameActive) {
+      spawnTimerRef.current = setTimeout(performSpawnTarget, settings.spawnTime);
     }
-
   }, [gameActive, currentDifficultySetting, stats.level, emitGameEvent, handleTargetMiss]);
-
 
   const handleTargetHit = useCallback((targetId: string, currentTargets: Target[]) => {
     const hitTargetDetails = currentTargets.find(t => t.id === targetId);
-    if (!gameActive || !hitTargetDetails) return; // Ensure game is active and target exists
+    if (!gameActive || !hitTargetDetails) return;
 
     const reactionTime = Date.now() - hitTargetDetails.spawnTime;
     if (hitTargetDetails.moveIntervalId) clearInterval(hitTargetDetails.moveIntervalId);
@@ -261,24 +238,21 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     setTargets(prev => prev.filter(t => t.id !== targetId));
     
     setStats(prev => {
-        const pointsEarned = prev.level * 2; // Use prev.level for consistency
-        const newScore = prev.score + pointsEarned;
-        emitGameEvent('target_hit', { targetId, reactionTimeMs: reactionTime, points: pointsEarned, currentScore: newScore });
-        return { ...prev, score: newScore, hits: prev.hits + 1 };
+      const pointsEarned = prev.level * 2;
+      const newScore = prev.score + pointsEarned;
+      emitGameEvent('target_hit', { targetId, reactionTimeMs: reactionTime, points: pointsEarned, currentScore: newScore });
+      return { ...prev, score: newScore, hits: prev.hits + 1 };
     });
-    
-    // Visual feedback (remains the same)
-  }, [gameActive, emitGameEvent]); // Removed targets dependency, pass as parameter instead
+  }, [gameActive, emitGameEvent]);
 
   const startGameFlow = () => {
-    console.log('[startGameFlow] Initializing game...');
     setStats({
-        score: 0,
-        level: 1,
-        timeLeft: duration,
-        hits: 0,
-        misses: 0,
-        accuracy: 0,
+      score: 0,
+      level: 1,
+      timeLeft: duration,
+      hits: 0,
+      misses: 0,
+      accuracy: 0,
     });
     setCurrentDifficultySetting(DIFFICULTY_LEVELS_CONFIG[0]);
     setUiMessage('');
@@ -287,24 +261,18 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     emitGameEvent('game_start', { difficulty: DIFFICULTY_LEVELS_CONFIG[0], duration });
     if (gameTimerRef.current) clearInterval(gameTimerRef.current);
     gameTimerRef.current = setInterval(updateGameTimer, 1000);
-    setGameActive(true); // This will trigger the useEffect to start spawning
+    setGameActive(true);
   };
 
-  // Effect for managing the spawn loop based on gameActive and performSpawnTarget identity
+  // Effect for managing the spawn loop
   useEffect(() => {
-    console.log(`[useEffect gameActive/performSpawnTarget] Fired. gameActive: ${gameActive}`);
     if (gameActive) {
-      console.log(`   Current spawnTimerRef: ${spawnTimerRef.current}. Clearing it.`);
-      // Always clear previous timer before starting a new one with the current performSpawnTarget
       if (spawnTimerRef.current) {
         clearTimeout(spawnTimerRef.current);
         spawnTimerRef.current = null;
       }
-      console.log(`   Calling performSpawnTarget (instance with spawn time: ${currentDifficultySetting.spawnTime}ms)`);
-      performSpawnTarget(); // Call the current (potentially new) version
+      performSpawnTarget();
     } else {
-      // Game is not active, clear all game-related timers
-      console.log(`   Game not active. Clearing all timers. SpawnTimer: ${spawnTimerRef.current}`);
       if (spawnTimerRef.current) {
         clearTimeout(spawnTimerRef.current);
         spawnTimerRef.current = null;
@@ -313,12 +281,10 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
         clearInterval(gameTimerRef.current);
         gameTimerRef.current = null;
       }
-      // Create a copy of the current map to avoid ref issues
       const currentTimers = new Map(targetRemovalTimersRef.current);
       currentTimers.forEach(clearTimeout);
       targetRemovalTimersRef.current.clear();
       
-      // Clear targets with movement intervals
       setTargets(prevTargets => {
         prevTargets.forEach(t => {
           if (t.moveIntervalId) clearInterval(t.moveIntervalId);
@@ -327,24 +293,21 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
       });
     }
 
-    // Cleanup function for this effect instance
     return () => {
-      console.log(`[useEffect gameActive/performSpawnTarget CLEANUP] Clearing spawnTimerRef: ${spawnTimerRef.current}`);
       if (spawnTimerRef.current) {
         clearTimeout(spawnTimerRef.current);
         spawnTimerRef.current = null;
       }
     };
-  }, [gameActive, performSpawnTarget, currentDifficultySetting.spawnTime]); // Added missing dependencies
+  }, [gameActive, performSpawnTarget, currentDifficultySetting.spawnTime]);
 
   // Effect for level and difficulty changes
   useEffect(() => {
-    if (!gameActive) return; // Only update level if game is active
+    if (!gameActive) return;
     const newLevel = calculateLevelFromScore(stats.score);
     if (newLevel !== stats.level) {
       const oldLevel = stats.level;
       const isLevelUp = newLevel > oldLevel;
-      console.log(`LEVEL ${isLevelUp ? 'UP' : 'DOWN'}: ${oldLevel} -> ${newLevel}. Score: ${stats.score}`);
       setStats(prev => ({ ...prev, level: newLevel }));
       setCurrentDifficultySetting(DIFFICULTY_LEVELS_CONFIG[newLevel - 1]);
       emitGameEvent('difficulty_change', { 
@@ -356,22 +319,17 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     }
   }, [stats.score, stats.level, gameActive, calculateLevelFromScore, emitGameEvent]);
 
-  // General cleanup for component unmount
+  // General cleanup
   useEffect(() => {
-    // Capture current ref values when the effect runs
     const currentGameTimer = gameTimerRef.current;
     const currentSpawnTimer = spawnTimerRef.current;
     const currentTargetRemovalTimers = new Map(targetRemovalTimersRef.current);
 
     return () => {
-      console.log('[StressClickGame] Component Unmounting. Clearing all timers.');
       if (currentGameTimer) clearInterval(currentGameTimer);
       if (currentSpawnTimer) clearTimeout(currentSpawnTimer);
-      
-      // Use the captured timers map
       currentTargetRemovalTimers.forEach(clearTimeout);
       
-      // Clear any movement intervals from targets
       setTargets(prevTargets => {
         prevTargets.forEach(t => { 
           if (t.moveIntervalId) clearInterval(t.moveIntervalId); 
@@ -379,7 +337,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
         return [];
       });
     };
-  }, []); // Empty: runs on unmount only
+  }, []);
 
   const toggleGame = () => {
     if (gameActive) {
@@ -395,88 +353,154 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // JSX remains the same
   return (
     <>
       <style jsx global>{`
-        .target-interactive {
+        .neo-target {
           position: absolute;
-          border-radius: 50%;
+          border: 4px solid #000;
           cursor: pointer;
-          transition: transform 0.05s ease-out, box-shadow 0.2s ease-in-out;
-          border: 2px solid white;
+          transition: all 0.1s ease-out;
+          box-shadow: 4px 4px 0px 0px #000;
+          font-family: 'JetBrains Mono', monospace;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #000;
+          font-size: 12px;
+          text-shadow: 2px 2px 0px #fff;
         }
-        .target-interactive:hover {
-          transform: scale(1.15);
-          box-shadow: 0 0 15px currentColor, 0 0 25px currentColor;
+        .neo-target:hover {
+          transform: scale(1.2) translate(-2px, -2px);
+          box-shadow: 8px 8px 0px 0px #000;
+          z-index: 10;
         }
-        .target-interactive:active {
-          transform: scale(0.95);
+        .neo-target:active {
+          transform: scale(0.9) translate(2px, 2px);
+          box-shadow: 2px 2px 0px 0px #000;
         }
-        .pulse-animation-strong {
-          animation: pulseKeyframeStrong 0.7s infinite alternate ease-in-out;
+        .neo-target.pulse-animation {
+          animation: neoPulse 0.8s infinite alternate ease-in-out;
         }
-        @keyframes pulseKeyframeStrong {
-          from { box-shadow: 0 0 5px 0px currentColor, 0 0 0 0px currentColor; opacity: 0.8; }
-          to { box-shadow: 0 0 15px 8px currentColor, 0 0 0 5px currentColor; opacity: 1; }
+        @keyframes neoPulse {
+          from { 
+            box-shadow: 4px 4px 0px 0px #000;
+            transform: scale(1);
+          }
+          to { 
+            box-shadow: 8px 8px 0px 0px #000;
+            transform: scale(1.05);
+          }
+        }
+        .neo-hit-effect {
+          animation: neoHitEffect 0.3s ease-out;
+        }
+        @keyframes neoHitEffect {
+          0% { transform: scale(1) rotate(0deg); }
+          25% { transform: scale(1.3) rotate(5deg); }
+          50% { transform: scale(1.1) rotate(-3deg); }
+          75% { transform: scale(1.2) rotate(2deg); }
+          100% { transform: scale(0) rotate(0deg); }
         }
       `}</style>
-      <div className="w-full h-full flex flex-col bg-gray-900 text-white rounded-lg overflow-hidden">
-        <div className="p-4 bg-gray-800 border-b border-gray-700">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl md:text-2xl font-bold text-red-400">Stress Click</h2>
-            <button
-              onClick={toggleGame}
-              className={`text-white font-bold py-2 px-4 md:py-3 md:px-6 rounded-md text-sm md:text-lg transition-all ${
-                gameActive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              {gameActive ? 'STOP' : 'START'}
-            </button>
+      
+      <div className="w-full h-full flex flex-col rounded-none overflow-hidden">
+        {/* Header */}
+        <Card variant="yellow" className="border-b-8 border-black rounded-none">
+          <div className="p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="neo-text-title text-black">STRESS CLICK</h2>
+              <Button
+                onClick={toggleGame}
+                variant={gameActive ? 'destructive' : 'success'}
+                size="xl"
+                className="text-lg"
+              >
+                {gameActive ? 'STOP CHAOS' : 'START CHAOS'}
+              </Button>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card variant="cyan" className="p-3 text-center">
+                <div className="text-xs font-black uppercase tracking-wider text-black mb-1">TIME</div>
+                <div className="font-mono text-xl font-black text-black">{formatTime(stats.timeLeft)}</div>
+              </Card>
+              
+              <Card variant="green" className="p-3 text-center">
+                <div className="text-xs font-black uppercase tracking-wider text-black mb-1">SCORE</div>
+                <div className="font-mono text-xl font-black text-black">{stats.score}</div>
+              </Card>
+              
+              <Card variant="orange" className="p-3 text-center">
+                <div className="text-xs font-black uppercase tracking-wider text-black mb-1">LEVEL</div>
+                <div className="font-mono text-xl font-black text-black">{stats.level}</div>
+              </Card>
+              
+              <Card variant="pink" className="p-3 text-center">
+                <div className="text-xs font-black uppercase tracking-wider text-black mb-1">ACCURACY</div>
+                <div className="font-mono text-xl font-black text-black">
+                  {stats.hits + stats.misses > 0 ? `${((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(0)}%` : '-'}
+                </div>
+              </Card>
+            </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 text-center">
-            <div><p className="text-xs text-gray-400">Time</p><p className="font-mono text-lg">{formatTime(stats.timeLeft)}</p></div>
-            <div><p className="text-xs text-gray-400">Score</p><p className="font-mono text-lg">{stats.score}</p></div>
-            <div><p className="text-xs text-gray-400">Level</p><p className="font-mono text-lg">{stats.level}</p></div>
-            <div><p className="text-xs text-gray-400">Accuracy</p><p className="font-mono text-lg">
-              {stats.hits + stats.misses > 0 ? `${((stats.hits / (stats.hits + stats.misses)) * 100).toFixed(0)}%` : '-'}
-            </p></div>
-          </div>
-        </div>
+        </Card>
 
+        {/* Game Area */}
         <div
           ref={gameAreaRef}
-          className="flex-1 relative bg-gray-800 bg-opacity-50 overflow-hidden"
+          className="flex-1 relative bg-gradient-to-br from-purple-400 via-pink-400 to-cyan-400 border-8 border-black overflow-hidden"
           style={{ minHeight: '300px' }}
         >
           {!gameActive && uiMessage && (
-            <p className="absolute inset-0 flex items-center justify-center text-xl md:text-2xl font-bold text-yellow-400 p-4">
-              {uiMessage}
-            </p>
+            <Card variant="white" className="absolute inset-4 flex items-center justify-center">
+              <div className="text-center p-8">
+                <div className="neo-text-heading text-black mb-4">{uiMessage}</div>
+                <Button onClick={toggleGame} variant="success" size="xl">
+                  PLAY AGAIN!
+                </Button>
+              </div>
+            </Card>
           )}
-           {!gameActive && !uiMessage && (
-             <p className="absolute inset-0 flex items-center justify-center text-xl md:text-2xl font-bold text-gray-500 p-4">
-              Click START to begin!
-            </p>
-           )}
+          
+          {!gameActive && !uiMessage && (
+            <Card variant="white" className="absolute inset-4 flex items-center justify-center">
+              <div className="text-center p-8">
+                <div className="neo-text-heading text-black mb-4">READY FOR CHAOS?</div>
+                <div className="text-sm font-bold text-black/70 uppercase tracking-wide mb-6">
+                  Click targets as fast as you can!
+                </div>
+                <Button onClick={toggleGame} variant="success" size="xl">
+                  UNLEASH THE MADNESS!
+                </Button>
+              </div>
+            </Card>
+          )}
+          
           {targets.map(target => (
             <div
               key={target.id}
               id={target.id}
-              className={`target-interactive ${target.animation === 'pulse' ? 'pulse-animation-strong' : ''}`}
+              className={`neo-target ${target.animation === 'pulse' ? 'pulse-animation' : ''}`}
               style={{
                 left: `${target.x}px`,
                 top: `${target.y}px`,
                 width: `${target.size}px`,
                 height: `${target.size}px`,
                 backgroundColor: target.color,
-                color: target.color, // For box-shadow
+                borderRadius: '0px', // Keep it square for brutalist look
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                if (gameActive) handleTargetHit(target.id, targets);
+                if (gameActive) {
+                  e.currentTarget.classList.add('neo-hit-effect');
+                  handleTargetHit(target.id, targets);
+                }
               }}
-            />
+            >
+              💥
+            </div>
           ))}
         </div>
       </div>

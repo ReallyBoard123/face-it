@@ -3,12 +3,12 @@
 
 import React, { useState, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { Button } from '../ui/button';
-import { Monitor, Square, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '../ui/alert';
+import { Card } from '../ui/card';
+import { Monitor, Square, AlertCircle, Zap, Target } from 'lucide-react';
 
 interface ScreenRecorderProps {
   onScreenRecorded: (blob: Blob) => void;
-  recordingMode: 'current_tab' | 'any_screen'; // current_tab for games, any_screen for browsing
+  recordingMode: 'current_tab' | 'any_screen';
   isRecording?: boolean;
   onRecordingStarted?: () => void;
   onRecordingStopped?: () => void;
@@ -46,12 +46,10 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
           video: {
             displaySurface: recordingMode === 'current_tab' ? 'browser' : 'monitor'
           },
-          audio: true, // Capture system audio if available
+          audio: true,
         };
 
-        // For current tab recording, we can be more specific
         if (recordingMode === 'current_tab') {
-          // Use type assertion with a more specific type for the constraints
           (constraints as DisplayMediaStreamOptions & { preferCurrentTab?: boolean }).preferCurrentTab = true;
         }
 
@@ -83,7 +81,6 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
         mediaRecorderRef.current.stop();
       }
       
-      // Stop the screen stream
       if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
         setScreenStream(null);
@@ -101,7 +98,6 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
       try {
         chunksRef.current = [];
 
-        // Use type assertion to handle the mimeType option safely
         const options: MediaRecorderOptions = {};
         const mimeType = 'video/webm;codecs=vp8,opus';
         if (MediaRecorder.isTypeSupported(mimeType)) {
@@ -130,7 +126,6 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
           setError(`Recording error: ${event.error?.message || 'Unknown error'}`);
         };
 
-        // Listen for when user stops sharing (e.g., clicks "Stop sharing" in browser)
         streamToRecord.getVideoTracks()[0].addEventListener('ended', () => {
           console.log('Screen sharing ended by user');
           stopScreenRecording();
@@ -151,7 +146,6 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
       getStream: () => screenStream,
     }));
 
-    // Clean up stream when component unmounts
     React.useEffect(() => {
       return () => {
         if (screenStream) {
@@ -161,64 +155,73 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
     }, [screenStream]);
 
     return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Monitor className="h-4 w-4" />
-          Screen Recording
-          <span className="text-xs text-muted-foreground">
-            ({recordingMode === 'current_tab' ? 'Current Tab' : 'Any Screen'})
-          </span>
-        </div>
-
-        {error && (
-          <Alert variant="destructive" className="text-xs">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {hasPermission === false && (
-          <Button 
-            onClick={requestScreenCapture} 
-            variant="outline" 
-            size="sm"
-            className="w-full text-xs"
-          >
-            <Monitor className="mr-2 h-4 w-4" />
-            Grant Screen Capture Permission
-          </Button>
-        )}
-
-        {hasPermission === true && !isRecording && (
-          <Button 
-            onClick={startScreenRecording} 
-            variant="default" 
-            size="sm"
-            className="w-full text-xs"
-          >
-            <Monitor className="mr-2 h-4 w-4" />
-            Start Screen Recording
-          </Button>
-        )}
-
-        {isRecording && (
-          <Button 
-            onClick={stopScreenRecording} 
-            variant="destructive" 
-            size="sm"
-            className="w-full text-xs"
-          >
-            <Square className="mr-2 h-4 w-4" />
-            Stop Screen Recording
-          </Button>
-        )}
-
-        {screenStream && (
-          <div className="text-xs text-muted-foreground">
-            ✅ Screen capture ready
+      <Card variant="cyan" className="p-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-black">
+            <Monitor className="h-5 w-5" />
+            <div className="flex-1">
+              <div className="font-black uppercase text-sm">SCREEN RECORDING</div>
+              <div className="text-xs font-bold opacity-70 uppercase tracking-wider">
+                ({recordingMode === 'current_tab' ? 'CURRENT TAB' : 'ANY SCREEN'})
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {error && (
+            <Card variant="pink" className="p-3">
+              <div className="flex items-center gap-2 text-black">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-xs font-bold uppercase">{error}</span>
+              </div>
+            </Card>
+          )}
+
+          {hasPermission === false && (
+            <Button 
+              onClick={requestScreenCapture} 
+              variant="warning"
+              size="sm"
+              className="w-full"
+            >
+              <Monitor className="mr-2 h-4 w-4" />
+              GRANT SCREEN PERMISSION
+            </Button>
+          )}
+
+          {hasPermission === true && !isRecording && (
+            <Button 
+              onClick={startScreenRecording} 
+              variant="success"
+              size="sm"
+              className="w-full"
+            >
+              <Target className="mr-2 h-4 w-4" />
+              START SCREEN CAPTURE
+            </Button>
+          )}
+
+          {isRecording && (
+            <Button 
+              onClick={stopScreenRecording} 
+              variant="destructive"
+              size="sm"
+              className="w-full"
+            >
+              <Square className="mr-2 h-4 w-4" />
+              STOP SCREEN CAPTURE
+            </Button>
+          )}
+
+          {screenStream && (
+            <Card variant="green" className="p-3 text-center">
+              <div className="flex items-center justify-center gap-2 text-black">
+                <Zap className="h-4 w-4" />
+                <span className="text-xs font-black uppercase">SCREEN CAPTURE READY!</span>
+              </div>
+            </Card>
+          )}
+        </div>
+      </Card>
     );
   }
 );

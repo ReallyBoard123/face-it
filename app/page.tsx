@@ -14,7 +14,7 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { Loader2, Target, Gamepad2, Globe } from 'lucide-react';
+import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap } from 'lucide-react';
 import { StressClickGame } from '@/components/games/stress-click-games';
 import FlappyBirdGame from '@/components/games/flappy-bird';
 import { useRecordingFlow } from '@/hooks/use-recording-flow';
@@ -120,15 +120,33 @@ export default function Home() {
     websiteSession.cleanup();
   }, [recordingFlow, gameEvents, websiteSession]);
 
+  const getStatusColors = (state: string) => {
+    switch (state) {
+      case 'game_active_recording':
+      case 'website_browsing_recording':
+        return 'neo-status-recording';
+      case 'ready_to_start':
+        return 'neo-status-ready';
+      case 'analyzing':
+        return 'neo-status-analyzing';
+      default:
+        return 'neo-blue';
+    }
+  };
+
   const PageHeader = () => {
     const isActiveSession = recordingFlow.flowState === 'game_active_recording' || recordingFlow.flowState === 'website_browsing_recording';
     return (
-      <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3">
-        <Separator orientation="vertical" className={`mr-2 h-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
-        <div className="text-lg md:text-2xl font-bold">FaceIt Analysis</div>
+      <header className="flex h-20 shrink-0 items-center gap-4 border-b-8 border-black px-6 neo-yellow">
+        <Separator orientation="vertical" className={`mr-2 h-8 border-black border-l-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
+        <div className="neo-text-title text-black flex items-center gap-3">
+          <Sparkles className="h-8 w-8 md:h-12 md:w-12" />
+          FACEIT
+          <Zap className="h-8 w-8 md:h-12 md:w-12" />
+        </div>
         <div className="flex items-center gap-4 ml-auto">
           <EyeTrackingSwitch className="hidden sm:flex" />
-          <div className="text-sm text-muted-foreground capitalize hidden sm:block">
+          <div className={`text-lg font-black uppercase tracking-wider p-3 rounded-none border-4 border-black ${getStatusColors(recordingFlow.flowState)} hidden sm:block`}>
             {recordingFlow.flowState.replace(/_/g, ' ')}
           </div>
         </div>
@@ -140,160 +158,175 @@ export default function Home() {
   const isActiveSession = recordingFlow.flowState === 'game_active_recording' || recordingFlow.flowState === 'website_browsing_recording';
 
   return (
-    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
-      {!isActiveSession && (
-        <AppSidebar 
-          settings={settings} 
-          onSettingsChange={(newSettings) => setSettings(newSettings)}
-        />
-      )}
-      <SidebarInset>
-        <PageHeader />
-        <main className="flex-1 overflow-auto p-3 md:p-6">
-          <div className={`grid gap-4 md:gap-6 ${isActiveSession ? 'grid-cols-1 md:grid-cols-3 h-[calc(100vh-5.5rem)] md:h-[calc(100vh-6rem)]' : 'grid-cols-1'}`}>
-            
-            {/* Recording Session Manager */}
-            <div className={`${isActiveSession ? 'md:col-span-1' : 'max-w-2xl mx-auto w-full'}`}>
-              <RecordingSessionManager
-                // State from recording flow hook
-                flowState={recordingFlow.flowState}
-                selectedGame={recordingFlow.selectedGame}
-                isScreenRecording={recordingFlow.isScreenRecording}
-                countdown={recordingFlow.countdown}
-                errorMessage={recordingFlow.errorMessage}
-                isAnalyzingBackend={recordingFlow.isAnalyzingBackend}
-                
-                // State setters
-                setFlowState={recordingFlow.setFlowState}
-                setSelectedGame={recordingFlow.setSelectedGame}
-                setIsScreenRecording={recordingFlow.setIsScreenRecording}
-                setErrorMessage={recordingFlow.setErrorMessage}
-                
-                // Event handlers
-                onVideoRecorded={handleVideoRecorded}
-                onScreenRecorded={handleScreenRecorded}
-                onGameEvent={gameEvents.handleGameEvent}
-                
-                // Website session data
-                websiteUrl={websiteSession.websiteUrl}
-                setWebsiteUrl={websiteSession.setWebsiteUrl}
-                websiteTabRef={websiteSession.websiteTabRef}
-                isValidUrl={websiteSession.isValidUrl}
-                openWebsiteTab={websiteSession.openWebsiteTab}
-                startTabMonitoring={websiteSession.startTabMonitoring}
-                closeWebsiteTab={websiteSession.closeWebsiteTab}
-                
-                // Recording refs and actions
-                gameStartTimeRef={recordingFlow.gameStartTimeRef}
-                startCountdown={recordingFlow.startCountdown}
-                resetFlow={handleReset}
-              />
-            </div>
-            
-            {/* Active Game Session */}
-            {recordingFlow.flowState === "game_active_recording" && (
-              <div className="md:col-span-2 h-full" id={recordingFlow.selectedGame === 'stress_click' ? 'stress-click-game-area-ref-id' : 'flappy-bird-game-area'}>
-                <Card className="h-full flex flex-col">
-                  <CardHeader className="py-3 md:py-4">
-                    <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                      {recordingFlow.selectedGame === 'stress_click' ? (
-                        <><Target className="h-5 w-5" />Stress Click</>
-                      ) : (
-                        <><Gamepad2 className="h-5 w-5" />Flappy Bird</>
-                      )}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-grow flex items-center justify-center p-1 md:p-2 overflow-hidden">
-                    {recordingFlow.selectedGame === 'stress_click' ? (
-                      <StressClickGame 
-                        duration={recordingFlow.DEFAULT_GAME_DURATION_SECONDS} 
-                        onGameEvent={gameEvents.handleGameEvent} 
-                      />
-                    ) : (
-                      <FlappyBirdGame onGameEvent={gameEvents.handleGameEvent} />
-                    )}
-                  </CardContent>
+    <div className="min-h-screen bg-gradient-to-br from-yellow-300 via-pink-300 to-cyan-300">
+      <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        {!isActiveSession && (
+          <AppSidebar 
+            settings={settings} 
+            onSettingsChange={(newSettings) => setSettings(newSettings)}
+          />
+        )}
+        <SidebarInset>
+          <PageHeader />
+          <main className="flex-1 overflow-auto p-6">
+            <div className={`grid gap-8 ${isActiveSession ? 'grid-cols-1 md:grid-cols-3 h-[calc(100vh-8rem)]' : 'grid-cols-1'}`}>
+              
+              {/* Recording Session Manager */}
+              <div className={`${isActiveSession ? 'md:col-span-1' : 'max-w-4xl mx-auto w-full'}`}>
+                <Card variant="purple" className="h-full">
+                  <RecordingSessionManager
+                    // State from recording flow hook
+                    flowState={recordingFlow.flowState}
+                    selectedGame={recordingFlow.selectedGame}
+                    isScreenRecording={recordingFlow.isScreenRecording}
+                    countdown={recordingFlow.countdown}
+                    errorMessage={recordingFlow.errorMessage}
+                    isAnalyzingBackend={recordingFlow.isAnalyzingBackend}
+                    
+                    // State setters
+                    setFlowState={recordingFlow.setFlowState}
+                    setSelectedGame={recordingFlow.setSelectedGame}
+                    setIsScreenRecording={recordingFlow.setIsScreenRecording}
+                    setErrorMessage={recordingFlow.setErrorMessage}
+                    
+                    // Event handlers
+                    onVideoRecorded={handleVideoRecorded}
+                    onScreenRecorded={handleScreenRecorded}
+                    onGameEvent={gameEvents.handleGameEvent}
+                    
+                    // Website session data
+                    websiteUrl={websiteSession.websiteUrl}
+                    setWebsiteUrl={websiteSession.setWebsiteUrl}
+                    websiteTabRef={websiteSession.websiteTabRef}
+                    isValidUrl={websiteSession.isValidUrl}
+                    openWebsiteTab={websiteSession.openWebsiteTab}
+                    startTabMonitoring={websiteSession.startTabMonitoring}
+                    closeWebsiteTab={websiteSession.closeWebsiteTab}
+                    
+                    // Recording refs and actions
+                    gameStartTimeRef={recordingFlow.gameStartTimeRef}
+                    startCountdown={recordingFlow.startCountdown}
+                    resetFlow={handleReset}
+                  />
                 </Card>
               </div>
-            )}
-
-            {/* Website Browsing Session */}
-            {recordingFlow.flowState === "website_browsing_recording" && (
-              <div className="md:col-span-2 h-full">
-                <Card className="h-full flex flex-col">
-                  <CardHeader className="py-3 md:py-4">
-                    <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                      <Globe className="h-5 w-5" />Website Browsing Session
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex-grow flex items-center justify-center p-4 text-center">
-                    <div className="space-y-4">
-                      <div className="text-lg font-medium">🌐 Browse freely in the new tab!</div>
-                      <div className="text-sm text-muted-foreground max-w-md">
-                        <p>• The website has opened in a new tab</p>
-                        <p>• Your facial expressions are being recorded</p>
-                        <p>• Your screen activity is also being captured</p>
-                        <p>• Click &ldquo;Stop Recording&rdquo; when you&rsquo;re finished browsing</p>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        URL: {websiteSession.websiteUrl}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-            
-            {/* Analysis Loading */}
-            {recordingFlow.flowState === "analyzing" && recordingFlow.isAnalyzingBackend && (
-              <div className="col-span-1 md:col-span-3 mt-4 md:mt-6 text-center">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base md:text-lg">
-                      Analyzing {recordingFlow.selectedGame === 'website_browse' ? 'Website Browsing' : 'Gameplay'}...
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3 md:space-y-4 py-8 md:py-10">
-                    <Loader2 className="h-12 w-12 md:h-16 md:w-16 animate-spin mx-auto text-primary" />
-                    <p className="text-sm text-muted-foreground">
-                      Analyzing facial expressions{recordingFlow.recordedScreenBlob ? ' and screen activity' : ''}...
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-            
-            {/* Results */}
-            {recordingFlow.flowState === "results_ready" && recordingFlow.analysisResults && (
-              <div className="col-span-1 md:col-span-3 mt-4 md:mt-6">
-                <DashboardGrid 
-                  settings={settings} 
-                  initialResults={recordingFlow.analysisResults} 
-                  videoBlob={recordingFlow.recordedVideoBlob || undefined} 
-                  gameEvents={gameEvents.gameEvents} 
-                  gameKeyMoments={gameEvents.gameKeyMoments} 
-                />
-                
-                {/* Screen Recording Preview */}
-                {recordingFlow.recordedScreenBlob && (
-                  <Card className="mt-6">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                        <Globe className="h-5 w-5" />Screen Recording
+              
+              {/* Active Game Session */}
+              {recordingFlow.flowState === "game_active_recording" && (
+                <div className="md:col-span-2 h-full" id={recordingFlow.selectedGame === 'stress_click' ? 'stress-click-game-area-ref-id' : 'flappy-bird-game-area'}>
+                  <Card variant={recordingFlow.selectedGame === 'stress_click' ? 'green' : 'blue'} className="h-full flex flex-col neo-game-area">
+                    <CardHeader className="py-4">
+                      <CardTitle className="flex items-center gap-3 text-black">
+                        {recordingFlow.selectedGame === 'stress_click' ? (
+                          <><Target className="h-6 w-6" />STRESS CLICK MAYHEM!</>
+                        ) : (
+                          <><Gamepad2 className="h-6 w-6" />FLAPPY BIRD CHAOS!</>
+                        )}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                      <div className="max-w-4xl mx-auto">
-                        <VideoPreview videoBlob={recordingFlow.recordedScreenBlob} />
+                    <CardContent className="flex-grow flex items-center justify-center p-4 overflow-hidden">
+                      {recordingFlow.selectedGame === 'stress_click' ? (
+                        <StressClickGame 
+                          duration={recordingFlow.DEFAULT_GAME_DURATION_SECONDS} 
+                          onGameEvent={gameEvents.handleGameEvent} 
+                        />
+                      ) : (
+                        <FlappyBirdGame onGameEvent={gameEvents.handleGameEvent} />
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Website Browsing Session */}
+              {recordingFlow.flowState === "website_browsing_recording" && (
+                <div className="md:col-span-2 h-full">
+                  <Card variant="cyan" className="h-full flex flex-col">
+                    <CardHeader className="py-4">
+                      <CardTitle className="flex items-center gap-3 text-black">
+                        <Globe className="h-6 w-6" />WEBSITE ADVENTURE MODE!
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-grow flex items-center justify-center p-6 text-center">
+                      <div className="space-y-6">
+                        <div className="text-3xl font-black text-black">🌐 SURF THE WEB!</div>
+                        <Card variant="white" className="p-6 max-w-md">
+                          <div className="text-sm font-bold text-black space-y-2 uppercase">
+                            <p>• Website opened in new tab</p>
+                            <p>• Facial expressions recording</p>
+                            <p>• Screen activity captured</p>
+                            <p>• Click &quot;STOP&quot; when done browsing</p>
+                          </div>
+                        </Card>
+                        <div className="text-xs font-bold text-black border-4 border-black p-3 neo-yellow inline-block">
+                          URL: {websiteSession.websiteUrl}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
-                )}
-              </div>
-            )}
-          </div>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+                </div>
+              )}
+              
+              {/* Analysis Loading */}
+              {recordingFlow.flowState === "analyzing" && recordingFlow.isAnalyzingBackend && (
+                <div className="col-span-1 md:col-span-3 mt-8 text-center">
+                  <Card variant="orange" className="neo-pulse">
+                    <CardHeader>
+                      <CardTitle className="text-black">
+                        ANALYZING {recordingFlow.selectedGame === 'website_browse' ? 'WEBSITE CHAOS' : 'GAMEPLAY MADNESS'}...
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6 py-12">
+                      <Loader2 className="h-20 w-20 animate-spin mx-auto text-black" />
+                      <p className="text-lg font-bold text-black uppercase tracking-wider">
+                        CRUNCHING THE DATA{recordingFlow.recordedScreenBlob ? ' & SCREEN ACTIVITY' : ''}...
+                      </p>
+                      <div className="flex justify-center gap-2">
+                        {[...Array(5)].map((_, i) => (
+                          <div 
+                            key={i} 
+                            className="w-4 h-4 neo-pink border-2 border-black animate-bounce"
+                            style={{ animationDelay: `${i * 0.1}s` }}
+                          />
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+              
+              {/* Results */}
+              {recordingFlow.flowState === "results_ready" && recordingFlow.analysisResults && (
+                <div className="col-span-1 md:col-span-3 mt-8">
+                  <DashboardGrid 
+                    settings={settings} 
+                    initialResults={recordingFlow.analysisResults} 
+                    videoBlob={recordingFlow.recordedVideoBlob || undefined} 
+                    gameEvents={gameEvents.gameEvents} 
+                    gameKeyMoments={gameEvents.gameKeyMoments} 
+                  />
+                  
+                  {/* Screen Recording Preview */}
+                  {recordingFlow.recordedScreenBlob && (
+                    <Card variant="green" className="mt-8">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-3 text-black">
+                          <Globe className="h-6 w-6" />SCREEN RECORDING PLAYBACK
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="max-w-4xl mx-auto border-8 border-black shadow-[12px_12px_0px_0px_#000]">
+                          <VideoPreview videoBlob={recordingFlow.recordedScreenBlob} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </div>
   );
 }

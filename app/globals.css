@@ -1,153 +1,233 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
-
 @layer base {
   :root {
-
-    --background: 0 0% 100%;
-
-    --foreground: 0 0% 3.9%;
-
-    --card: 0 0% 100%;
-
-    --card-foreground: 0 0% 3.9%;
-
-    --popover: 0 0% 100%;
-
-    --popover-foreground: 0 0% 3.9%;
-
-    --primary: 0 0% 9%;
-
-    --primary-foreground: 0 0% 98%;
-
-    --secondary: 0 0% 96.1%;
-
-    --secondary-foreground: 0 0% 9%;
-
-    --muted: 0 0% 96.1%;
-
-    --muted-foreground: 0 0% 45.1%;
-
-    --accent: 0 0% 96.1%;
-
-    --accent-foreground: 0 0% 9%;
-
-    --destructive: 0 84.2% 60.2%;
-
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 89.8%;
-
-    --input: 0 0% 89.8%;
-
-    --ring: 0 0% 3.9%;
-
-    --chart-1: 12 76% 61%;
-
-    --chart-2: 173 58% 39%;
-
-    --chart-3: 197 37% 24%;
-
-    --chart-4: 43 74% 66%;
-
-    --chart-5: 27 87% 67%;
-
-    --radius: 0.5rem
-  ;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%}
+    /* Neobrutalism Color Palette */
+    --background: 45 100% 95%; /* Light cream/yellow */
+    --foreground: 0 0% 0%; /* Pure black */
+    
+    --card: 120 100% 85%; /* Neon green */
+    --card-foreground: 0 0% 0%;
+    
+    --popover: 300 100% 85%; /* Hot pink */
+    --popover-foreground: 0 0% 0%;
+    
+    --primary: 240 100% 60%; /* Electric blue */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 60 100% 70%; /* Bright yellow */
+    --secondary-foreground: 0 0% 0%;
+    
+    --muted: 180 50% 80%; /* Cyan */
+    --muted-foreground: 0 0% 20%;
+    
+    --accent: 320 100% 70%; /* Hot pink */
+    --accent-foreground: 0 0% 0%;
+    
+    --destructive: 0 100% 60%; /* Neon red */
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 0%; /* Pure black borders */
+    --input: 0 0% 100%; /* White */
+    --ring: 240 100% 60%; /* Electric blue */
+    
+    --radius: 0rem; /* No border radius for brutalist look */
+    
+    /* Sidebar colors */
+    --sidebar-background: 280 100% 85%; /* Purple */
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 160 100% 60%; /* Emerald */
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 40 100% 70%; /* Orange */
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 0%;
+    --sidebar-ring: 240 100% 60%;
+  }
+  
   .dark {
-
-    --background: 0 0% 3.9%;
-
-    --foreground: 0 0% 98%;
-
-    --card: 0 0% 3.9%;
-
-    --card-foreground: 0 0% 98%;
-
-    --popover: 0 0% 3.9%;
-
-    --popover-foreground: 0 0% 98%;
-
-    --primary: 0 0% 98%;
-
-    --primary-foreground: 0 0% 9%;
-
-    --secondary: 0 0% 14.9%;
-
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 0 0% 14.9%;
-
-    --muted-foreground: 0 0% 63.9%;
-
-    --accent: 0 0% 14.9%;
-
-    --accent-foreground: 0 0% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-
-    --destructive-foreground: 0 0% 98%;
-
-    --border: 0 0% 14.9%;
-
-    --input: 0 0% 14.9%;
-
-    --ring: 0 0% 83.1%;
-
-    --chart-1: 220 70% 50%;
-
-    --chart-2: 160 60% 45%;
-
-    --chart-3: 30 80% 55%;
-
-    --chart-4: 280 65% 60%;
-
-    --chart-5: 340 75% 55%
-  ;
-
-    --sidebar-background: 240 5.9% 10%;
-
-    --sidebar-foreground: 240 4.8% 95.9%;
-
-    --sidebar-primary: 224.3 76.3% 48%;
-
-    --sidebar-primary-foreground: 0 0% 100%;
-
-    --sidebar-accent: 240 3.7% 15.9%;
-
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-
-    --sidebar-border: 240 3.7% 15.9%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%}
+    /* Dark mode with inverted neobrutalism */
+    --background: 260 30% 15%; /* Dark purple */
+    --foreground: 0 0% 100%;
+    
+    --card: 120 60% 25%; /* Dark green */
+    --card-foreground: 0 0% 100%;
+    
+    --popover: 300 60% 25%; /* Dark pink */
+    --popover-foreground: 0 0% 100%;
+    
+    --primary: 240 100% 70%; /* Bright blue */
+    --primary-foreground: 0 0% 0%;
+    
+    --secondary: 60 100% 30%; /* Dark yellow */
+    --secondary-foreground: 0 0% 100%;
+    
+    --muted: 180 30% 30%; /* Dark cyan */
+    --muted-foreground: 0 0% 80%;
+    
+    --accent: 320 100% 80%; /* Bright pink */
+    --accent-foreground: 0 0% 0%;
+    
+    --destructive: 0 100% 70%; /* Bright red */
+    --destructive-foreground: 0 0% 0%;
+    
+    --border: 0 0% 100%; /* White borders in dark mode */
+    --input: 0 0% 20%;
+    --ring: 240 100% 70%;
+    
+    --sidebar-background: 280 60% 20%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 160 100% 70%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 40 100% 80%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 100%;
+    --sidebar-ring: 240 100% 70%;
+  }
 }
-
-
 
 @layer base {
   * {
     @apply border-border;
   }
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-mono;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+  }
+  
+  /* Neobrutalist elements */
+  .neo-card {
+    @apply bg-card border-4 border-black shadow-[8px_8px_0px_0px_#000];
+    transform: translate(0, 0);
+    transition: all 0.1s ease;
+  }
+  
+  .neo-card:hover {
+    @apply shadow-[12px_12px_0px_0px_#000];
+    transform: translate(-2px, -2px);
+  }
+  
+  .neo-button {
+    @apply border-4 border-black font-bold uppercase tracking-wide shadow-[4px_4px_0px_0px_#000];
+    transform: translate(0, 0);
+    transition: all 0.1s ease;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .neo-button:hover {
+    @apply shadow-[6px_6px_0px_0px_#000];
+    transform: translate(-2px, -2px);
+  }
+  
+  .neo-button:active {
+    @apply shadow-[2px_2px_0px_0px_#000];
+    transform: translate(2px, 2px);
+  }
+  
+  .neo-input {
+    @apply border-4 border-black bg-white shadow-[4px_4px_0px_0px_#000] font-mono font-semibold;
+  }
+  
+  .neo-input:focus {
+    @apply shadow-[6px_6px_0px_0px_#000];
+    transform: translate(-1px, -1px);
+  }
+  
+  /* Color variations */
+  .neo-green {
+    @apply bg-green-400;
+  }
+  
+  .neo-pink {
+    @apply bg-pink-400;
+  }
+  
+  .neo-blue {
+    @apply bg-blue-400;
+  }
+  
+  .neo-yellow {
+    @apply bg-yellow-400;
+  }
+  
+  .neo-purple {
+    @apply bg-purple-400;
+  }
+  
+  .neo-orange {
+    @apply bg-orange-400;
+  }
+  
+  .neo-cyan {
+    @apply bg-cyan-400;
+  }
+  
+  /* Text styles */
+  .neo-text-title {
+    @apply text-4xl md:text-6xl font-black uppercase tracking-wider;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 4px 4px 0px #000;
+  }
+  
+  .neo-text-heading {
+    @apply text-2xl md:text-3xl font-black uppercase tracking-wide;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  .neo-text-label {
+    @apply text-sm font-bold uppercase tracking-widest;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  /* Game area styles */
+  .neo-game-area {
+    @apply border-8 border-black shadow-[12px_12px_0px_0px_#000] bg-gradient-to-br from-purple-400 via-pink-400 to-cyan-400;
+  }
+  
+  /* Animation for loading */
+  .neo-pulse {
+    animation: neo-pulse 1s ease-in-out infinite alternate;
+  }
+  
+  @keyframes neo-pulse {
+    from {
+      transform: scale(1) translate(0, 0);
+      box-shadow: 8px 8px 0px 0px #000;
+    }
+    to {
+      transform: scale(1.02) translate(-1px, -1px);
+      box-shadow: 12px 12px 0px 0px #000;
+    }
+  }
+  
+  /* Status indicators */
+  .neo-status-recording {
+    @apply bg-red-400 border-4 border-black animate-pulse;
+  }
+  
+  .neo-status-ready {
+    @apply bg-green-400 border-4 border-black;
+  }
+  
+  .neo-status-analyzing {
+    @apply bg-yellow-400 border-4 border-black neo-pulse;
+  }
+  
+  /* Charts and data viz */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: #000;
+    stroke-width: 2;
+  }
+  
+  .recharts-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: bold;
+    fill: #000;
   }
 }
