@@ -12,6 +12,10 @@ scipy==1.10.1
 opencv-python
 Pillow
 
+# CPU-optimized PyTorch (instead of default)
+torch==2.0.1+cpu
+torchvision==0.15.2+cpu
+--find-links https://download.pytorch.org/whl/torch_stable.html
+
 # Facial expression analysis
-py-feat
 py-feat

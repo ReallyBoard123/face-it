@@ -21,6 +21,11 @@ RUN python -c "from feat import Detector; Detector()"
 # Add the user's local binary directory to the system's PATH
 ENV PATH=/root/.local/bin:$PATH
 
+# Set PyTorch to use CPU optimizations and suppress NNPACK warnings
+ENV OMP_NUM_THREADS=1
+ENV PYTORCH_DISABLE_CUDA_MEM_EFFICIENT_ATTENTION=1
+ENV NNPACK_BACKEND=disabled
+
 # Copy the rest of your application code
 COPY . .
 
