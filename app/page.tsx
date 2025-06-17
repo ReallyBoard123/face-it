@@ -1,7 +1,7 @@
 // app/page.tsx
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { VideoRecorderHandles } from '@/components/video/video-recorder';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
@@ -9,12 +9,13 @@ import { VideoPreview } from '@/components/video/video-preview';
 import { RecordingSessionManager } from '@/components/recording/recording-session-manager';
 import { EyeTrackingSwitch } from '@/components/eye-tracking/eye-tracking-switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap } from 'lucide-react';
+import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap, Eye, EyeOff } from 'lucide-react';
 import { StressClickGame } from '@/components/games/stress-click-games';
 import FlappyBirdGame from '@/components/games/flappy-bird';
 import { useRecordingFlow } from '@/hooks/use-recording-flow';
@@ -34,6 +35,7 @@ export default function Home() {
   });
 
   const recordingFlow = useRecordingFlow();
+  const [showScreenPreview, setShowScreenPreview] = useState(false);
   const websiteSession = useWebsiteSession();
   const videoRecorderRef = React.useRef<VideoRecorderHandles>(null);
   const gameEvents = useGameEvents(
@@ -309,12 +311,23 @@ export default function Home() {
                   {/* Screen Recording Preview */}
                   {recordingFlow.recordedScreenBlob && (
                     <Card variant="green" className="mt-8">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-3 text-black">
-                          <Globe className="h-6 w-6" />SCREEN RECORDING PLAYBACK
-                        </CardTitle>
+                      <CardHeader className="relative pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-3 text-black">
+                            <Globe className="h-6 w-6" />
+                            SCREEN RECORDING PLAYBACK
+                          </CardTitle>
+                          <Button
+                            onClick={() => setShowScreenPreview(!showScreenPreview)}
+                            variant="ghost"
+                            size="sm"
+                            className="border-4 border-black"
+                          >
+                            {showScreenPreview ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+                          </Button>
+                        </div>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className={!showScreenPreview ? 'hidden' : ''}>
                         <div className="max-w-4xl mx-auto border-8 border-black shadow-[12px_12px_0px_0px_#000]">
                           <VideoPreview videoBlob={recordingFlow.recordedScreenBlob} />
                         </div>

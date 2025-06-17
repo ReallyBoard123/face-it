@@ -3,7 +3,8 @@
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Loader2, Play, Monitor, Zap, Target, AlertTriangle, Sparkles } from 'lucide-react';
+import { Loader2, Play, Monitor, Zap, Target, AlertTriangle, Sparkles, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 type GameFlowState = "idle" | "permissions_pending" | "permissions_denied" | "ready_to_start" | "game_active_recording" | "website_browsing_recording" | "analyzing" | "results_ready";
 
@@ -32,6 +33,31 @@ export function SessionStatus({
   onNewSession,
   getSessionTitle,
 }: SessionStatusProps) {
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (flowState !== 'results_ready') return;
+    
+    // Reset cooldown when first entering results_ready
+    if (cooldown === 0) {
+      setCooldown(10);
+      return; // Early return to prevent setting up the timer until next render
+    }
+
+    // Set up the countdown timer
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 0) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // Clean up the interval when component unmounts or dependencies change
+    return () => clearInterval(timer);
+  }, [flowState, cooldown]); // Added cooldown to dependencies
   const formatTime = (seconds: number) => {
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   };
@@ -155,16 +181,48 @@ export function SessionStatus({
     );
   }
 
-  if (flowState === "analyzing" || flowState === "results_ready") {
+  if (flowState === "analyzing") {
     return (
       <Button 
-        onClick={onNewSession} 
         variant="purple"
         size="xl" 
         className="mt-6 w-full"
+        disabled
       >
-        <Sparkles className="mr-3 h-6 w-6" />
-        NEW SESSION!
+        <Loader2 className="mr-3 h-6 w-6 animate-spin" />
+        ANALYZING...
+      </Button>
+    );
+  }
+
+  if (flowState === "results_ready") {
+    return (
+      <Button 
+        onClick={cooldown === 0 ? onNewSession : undefined} 
+        variant="purple"
+        size="xl" 
+        className="mt-6 w-full relative overflow-hidden"
+        disabled={cooldown > 0}
+      >
+        <div className="flex items-center justify-center w-full">
+          {cooldown > 0 ? (
+            <>
+              <Clock className="mr-3 h-6 w-6" />
+              PLEASE WAIT {cooldown}s
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-3 h-6 w-6" />
+              NEW SESSION!
+            </>
+          )}
+        </div>
+        {cooldown > 0 && (
+          <div 
+            className="absolute bottom-0 left-0 h-1 bg-black/10 transition-all duration-1000 ease-linear"
+            style={{ width: `${(cooldown / 10) * 100}%` }}
+          />
+        )}
       </Button>
     );
   }
