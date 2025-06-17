@@ -50,6 +50,7 @@ analysis_cache: Dict[str, Any] = {}
 cache_timestamps: Dict[str, float] = {}
 CACHE_TTL_SECONDS = 300  # 5 minutes
 
+
 # --- Core Functions ---
 
 def get_detector():
@@ -85,6 +86,17 @@ def clean_expired_cache():
         cache_timestamps.pop(key, None)
     if expired_keys:
         logger.info(f"Cleaned {len(expired_keys)} expired facial analysis cache entries")
+
+def clear_all_cache():
+    """Manually clear all cache entries."""
+    global analysis_cache, cache_timestamps
+    
+    cache_size = len(analysis_cache)
+    analysis_cache.clear()
+    cache_timestamps.clear()
+    
+    logger.info(f"Manually cleared all cache entries. Removed {cache_size} entries.")
+    return cache_size
 
 def convert_video_sync(input_path: str, output_path: str) -> bool:
     """Synchronous video conversion using ffmpeg via OpenCV."""

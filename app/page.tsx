@@ -15,12 +15,14 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap, Eye, EyeOff, Server, Wifi } from 'lucide-react';
 import { StressClickGame } from '@/components/games/stress-click-games';
 import FlappyBirdGame from '@/components/games/flappy-bird';
 import { useRecordingFlow } from '@/hooks/use-recording-flow';
 import { useGameEvents } from '@/hooks/use-game-events';
 import { useWebsiteSession } from '@/hooks/use-website-session';
+import { useBackendService } from '@/hooks/use-backend-service'; // NEW IMPORT
+import { toast } from 'sonner'; // NEW IMPORT
 
 type AnalysisTypeString = "emotions" | "aus" | "combined" | "landmarks";
 type VisualizationStyleString = "timeline" | "heatmap" | "distribution";
@@ -36,6 +38,7 @@ export default function Home() {
 
   const recordingFlow = useRecordingFlow();
   const [showScreenPreview, setShowScreenPreview] = useState(false);
+  const backendService = useBackendService(); // NEW HOOK
   const websiteSession = useWebsiteSession();
   const videoRecorderRef = React.useRef<VideoRecorderHandles>(null);
   const gameEvents = useGameEvents(
@@ -116,11 +119,36 @@ export default function Home() {
     }
   }, [recordingFlow, recordingFlow.recordedVideoBlob, recordingFlow.recordedScreenBlob, recordingFlow.flowState, recordingFlow.setFlowState, analyzeVideo]);
 
-  const handleReset = useCallback(() => {
+  // UPDATED RESET FUNCTION WITH BACKEND SERVICE INTEGRATION
+  const handleReset = useCallback(async () => {
+    // Start with frontend cleanup
     recordingFlow.resetFlow();
     gameEvents.resetGameEvents();
     websiteSession.cleanup();
-  }, [recordingFlow, gameEvents, websiteSession]);
+    
+    // Prepare backend for new session with custom neo-brutalist style toast
+    try {
+      await backendService.prepareNewSession();
+    } catch {
+      // Error is already shown via toast, but we can log it
+      console.warn('Backend preparation failed, but frontend reset completed');
+    }
+  }, [recordingFlow, gameEvents, websiteSession, backendService]);
+
+  // NEW: Check server health on app startup
+  useEffect(() => {
+    const checkServerOnStartup = async () => {
+      try {
+        await backendService.healthCheck();
+        console.log('Initial server health check completed');
+      } catch (error) {
+        console.warn('Initial server health check failed:', error);
+        toast.warning('⚠️ Backend server may not be running. Some features may be unavailable.');
+      }
+    };
+
+    checkServerOnStartup();
+  }, [backendService]);
 
   const getStatusColors = (state: string) => {
     switch (state) {
@@ -148,6 +176,27 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4 ml-auto">
           <EyeTrackingSwitch className="hidden sm:flex" />
+          
+          {/* NEW: Backend status indicator with neo-brutalist styling */}
+          {backendService.isLoading && (
+            <div className="flex items-center gap-2 border-4 border-black neo-orange p-2 font-black text-black uppercase text-xs">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="hidden sm:inline">SERVER CHECK...</span>
+            </div>
+          )}
+          
+          {backendService.serverStatus && (
+            <div className={`flex items-center gap-2 border-4 border-black p-2 font-black text-black uppercase text-xs ${
+              backendService.serverStatus.detector_ready ? 'neo-green' : 'neo-orange'
+            }`}>
+              {backendService.serverStatus.detector_ready ? (
+                <><Server className="h-4 w-4" />READY!</>
+              ) : (
+                <><Wifi className="h-4 w-4" />LOADING...</>
+              )}
+            </div>
+          )}
+          
           <div className={`text-lg font-black uppercase tracking-wider p-3 rounded-none border-4 border-black ${getStatusColors(recordingFlow.flowState)} hidden sm:block`}>
             {recordingFlow.flowState.replace(/_/g, ' ')}
           </div>
@@ -208,7 +257,7 @@ export default function Home() {
                     // Recording refs and actions
                     gameStartTimeRef={recordingFlow.gameStartTimeRef}
                     startCountdown={recordingFlow.startCountdown}
-                    resetFlow={handleReset}
+                    resetFlow={handleReset} // UPDATED TO USE NEW BACKEND-INTEGRATED RESET
                   />
                 </Card>
               </div>
