@@ -58,12 +58,11 @@ def get_detector():
     if detector is None:
         try:
             from feat import Detector
-            logger.info("Initializing py-feat detector for GPU...")
-            # This is the key change: telling the detector to use the CUDA device (GPU)
-            detector = Detector(device="cuda")
-            logger.info("Detector initialized successfully on GPU!")
+            logger.info("Initializing py-feat detector...")
+            detector = Detector()
+            logger.info("Detector initialized successfully!")
         except Exception as e:
-            logger.error(f"Failed to initialize py-feat detector on GPU: {e}")
+            logger.error(f"Failed to initialize py-feat detector: {e}")
             raise
     return detector
 
@@ -130,6 +129,25 @@ async def convert_video(input_path: str, output_path: str) -> bool:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, convert_video_sync, input_path, output_path)
 
+def safe_convert_to_python_types(obj):
+    """Safely convert numpy/pandas types to native Python types."""
+    if isinstance(obj, (np.integer, np.int_, np.int8, np.int16, np.int32, np.int64)):
+        return int(obj)
+    elif isinstance(obj, (np.floating, np.float_, np.float16, np.float32, np.float64)):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, pd.Series):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: safe_convert_to_python_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [safe_convert_to_python_types(item) for item in obj]
+    elif pd.isna(obj):
+        return None
+    else:
+        return obj
+
 def run_detector_sync(file_path: str, config: AnalysisConfig) -> pd.DataFrame:
     """Synchronously run the py-feat detector on an image or video."""
     detector_instance = get_detector()
@@ -175,65 +193,112 @@ def find_peaks(values: np.ndarray, threshold: float = 0.7) -> List[int]:
 
 def analyze_emotions(results: pd.DataFrame) -> Dict[str, Any]:
     """Analyze emotion data from py-feat results."""
-    emotion_cols = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise', 'neutral']
-    available_emotions = [col for col in emotion_cols if col in results.columns]
-    if not available_emotions: return {}
-    
-    emotion_stats = {}
-    for emotion in available_emotions:
-        values = results[emotion].dropna()
-        if not values.empty:
-            emotion_stats[emotion] = {
-                "mean": float(values.mean()),
-                "std": float(values.std()) if len(values) > 1 else 0.0,
-                "min": float(values.min()),
-                "max": float(values.max()),
-                "peaks": find_peaks(values.values),
-            }
-    
-    emotion_data = results[available_emotions].fillna(0)
-    dominant_emotions = emotion_data.idxmax(axis=1).value_counts().to_dict()
-    
-    return {
-        "statistics": emotion_stats,
-        "dominant_emotions": dominant_emotions,
-        "timeline": prepare_timeline_data(results, available_emotions)
-    }
+    try:
+        emotion_cols = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise', 'neutral']
+        available_emotions = [col for col in emotion_cols if col in results.columns]
+        if not available_emotions: 
+            logger.warning("No emotion columns found in results")
+            return {}
+        
+        emotion_stats = {}
+        for emotion in available_emotions:
+            try:
+                values = results[emotion].dropna()
+                if not values.empty:
+                    # Convert to numpy array first, then to native Python types
+                    values_array = values.values
+                    emotion_stats[emotion] = {
+                        "mean": safe_convert_to_python_types(np.mean(values_array)),
+                        "std": safe_convert_to_python_types(np.std(values_array)) if len(values_array) > 1 else 0.0,
+                        "min": safe_convert_to_python_types(np.min(values_array)),
+                        "max": safe_convert_to_python_types(np.max(values_array)),
+                        "peaks": find_peaks(values_array),
+                    }
+            except Exception as e:
+                logger.warning(f"Error processing emotion {emotion}: {e}")
+                continue
+        
+        # Process dominant emotions safely
+        try:
+            emotion_data = results[available_emotions].fillna(0)
+            dominant_emotions = emotion_data.idxmax(axis=1).value_counts().to_dict()
+            # Convert to native Python types
+            dominant_emotions = {k: safe_convert_to_python_types(v) for k, v in dominant_emotions.items()}
+        except Exception as e:
+            logger.warning(f"Error calculating dominant emotions: {e}")
+            dominant_emotions = {}
+        
+        return {
+            "statistics": emotion_stats,
+            "dominant_emotions": dominant_emotions,
+            "timeline": prepare_timeline_data(results, available_emotions)
+        }
+    except Exception as e:
+        logger.error(f"Error in analyze_emotions: {e}")
+        return {}
 
 def analyze_action_units(results: pd.DataFrame) -> Dict[str, Any]:
     """Analyze action unit data from py-feat results."""
-    au_cols = [col for col in results.columns if col.startswith('AU') and col[2:].replace('_', '').isdigit()]
-    if not au_cols: return {}
-    au_stats = {}
-    for au in au_cols:
-        values = results[au].dropna()
-        if not values.empty:
-            au_stats[au] = {
-                "mean": float(values.mean()),
-                "activation_rate": float((values > 0.5).mean()),
-                "max_intensity": float(values.max()),
-            }
-    return {"statistics": au_stats, "timeline": prepare_timeline_data(results, au_cols)}
+    try:
+        au_cols = [col for col in results.columns if col.startswith('AU') and col[2:].replace('_', '').isdigit()]
+        if not au_cols: 
+            logger.warning("No action unit columns found in results")
+            return {}
+        
+        au_stats = {}
+        for au in au_cols:
+            try:
+                values = results[au].dropna()
+                if not values.empty:
+                    values_array = values.values
+                    au_stats[au] = {
+                        "mean": safe_convert_to_python_types(np.mean(values_array)),
+                        "activation_rate": safe_convert_to_python_types(np.mean(values_array > 0.5)),
+                        "max_intensity": safe_convert_to_python_types(np.max(values_array)),
+                    }
+            except Exception as e:
+                logger.warning(f"Error processing action unit {au}: {e}")
+                continue
+        
+        return {"statistics": au_stats, "timeline": prepare_timeline_data(results, au_cols)}
+    except Exception as e:
+        logger.error(f"Error in analyze_action_units: {e}")
+        return {}
 
 def prepare_timeline_data(results: pd.DataFrame, columns: List[str], max_frames: int = 500) -> Dict[str, List[float]]:
-    """Prepare data for timeline visualization."""
-    if results.empty: return {"timestamps": []}
+    """Prepare data for timeline visualization with safe type conversion."""
+    try:
+        if results.empty: return {"timestamps": []}
 
-    if len(results) > max_frames:
-        step = len(results) // max_frames
-        results_sampled = results.iloc[::step]
-    else:
-        results_sampled = results
+        if len(results) > max_frames:
+            step = len(results) // max_frames
+            results_sampled = results.iloc[::step].copy()
+        else:
+            results_sampled = results.copy()
 
-    if 'times' in results_sampled.columns:
-        timeline = {"timestamps": results_sampled['times'].tolist()}
-    else:
-        timeline = {"timestamps": list(range(len(results_sampled)))}
+        timeline = {}
+        
+        # Handle timestamps
+        if 'times' in results_sampled.columns:
+            times_series = results_sampled['times']
+            timeline["timestamps"] = [safe_convert_to_python_types(x) for x in times_series.tolist()]
+        else:
+            timeline["timestamps"] = list(range(len(results_sampled)))
 
-    for col in columns:
-        if col in results_sampled.columns:
-            timeline[col] = results_sampled[col].fillna(0).tolist()
-    return timeline
+        # Handle other columns
+        for col in columns:
+            if col in results_sampled.columns:
+                try:
+                    series_values = results_sampled[col].fillna(0)
+                    timeline[col] = [safe_convert_to_python_types(x) for x in series_values.tolist()]
+                except Exception as e:
+                    logger.warning(f"Error processing column {col} for timeline: {e}")
+                    timeline[col] = [0] * len(results_sampled)
+        
+        return timeline
+    except Exception as e:
+        logger.error(f"Error in prepare_timeline_data: {e}")
+        return {"timestamps": []}
 
 def extract_emotional_key_moments(
     video_path: str,
@@ -243,96 +308,120 @@ def extract_emotional_key_moments(
 ) -> List[Dict[str, Any]]:
     """Extract key emotional moments based on spikes."""
     key_moments: List[Dict[str, Any]] = []
-    emotions_to_track = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise']
     
-    if results_df.empty or len(results_df) < 2:
-        return key_moments
-
-    available_emotions = [col for col in emotions_to_track if col in results_df.columns]
-    if not available_emotions:
-        return key_moments
-
-    if 'times' not in results_df.columns:
-        logger.warning("'times' column not found. Calculating from frame index and FPS.")
-        if fps <= 0: fps = 30.0
-        results_df_copy = results_df.copy()
-        results_df_copy['times'] = results_df_copy.index / fps
-    else:
-        results_df_copy = results_df
-
-    cap = None
-    processed_frames_for_spikes = set()
-
     try:
-        for i in range(1, len(results_df_copy)):
-            current_frame_data = results_df_copy.iloc[i]
-            previous_frame_data = results_df_copy.iloc[i-1]
-            frame_number = int(results_df_copy.index[i])
-            timestamp_sec = current_frame_data['times']
+        emotions_to_track = ['anger', 'disgust', 'fear', 'happiness', 'sadness', 'surprise']
+        
+        if results_df.empty or len(results_df) < 2:
+            return key_moments
 
-            if frame_number in processed_frames_for_spikes:
-                continue
+        available_emotions = [col for col in emotions_to_track if col in results_df.columns]
+        if not available_emotions:
+            return key_moments
 
-            for emotion in available_emotions:
-                current_value = current_frame_data[emotion]
-                previous_value = previous_frame_data[emotion]
+        # Create a copy to avoid modifying original
+        results_df_copy = results_df.copy()
+        
+        if 'times' not in results_df_copy.columns:
+            logger.warning("'times' column not found. Calculating from frame index and FPS.")
+            if fps <= 0: fps = 30.0
+            results_df_copy['times'] = results_df_copy.index / fps
 
-                if pd.notna(current_value) and pd.notna(previous_value) and \
-                   (current_value - previous_value > emotion_threshold_increase):
-                    
-                    if cap is None:
-                        cap = cv2.VideoCapture(video_path)
-                        if not cap.isOpened():
-                            return key_moments
-                    
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, float(frame_number))
-                    ret, frame_image = cap.read()
-                    if ret:
-                        _, buffer = cv2.imencode('.jpg', frame_image, [cv2.IMWRITE_JPEG_QUALITY, 60])
-                        frame_base64 = base64.b64encode(buffer).decode('utf-8')
-                        key_moments.append({
-                            'timestamp': timestamp_sec,
-                            'reason': f'{emotion.capitalize()} increased by {((current_value - previous_value)*100):.0f}%',
-                            'faceFrame': frame_base64,
-                            'type': 'emotion_spike',
-                            'frameNumber': frame_number
-                        })
-                        processed_frames_for_spikes.add(frame_number)
-                        break
+        cap = None
+        processed_frames_for_spikes = set()
+
+        try:
+            for i in range(1, len(results_df_copy)):
+                current_frame_data = results_df_copy.iloc[i]
+                previous_frame_data = results_df_copy.iloc[i-1]
+                frame_number = int(results_df_copy.index[i])
+                timestamp_sec = current_frame_data['times']
+
+                if frame_number in processed_frames_for_spikes:
+                    continue
+
+                for emotion in available_emotions:
+                    try:
+                        current_value = current_frame_data[emotion]
+                        previous_value = previous_frame_data[emotion]
+
+                        if pd.notna(current_value) and pd.notna(previous_value) and \
+                           (current_value - previous_value > emotion_threshold_increase):
+                            
+                            if cap is None:
+                                cap = cv2.VideoCapture(video_path)
+                                if not cap.isOpened():
+                                    return key_moments
+                            
+                            cap.set(cv2.CAP_PROP_POS_FRAMES, float(frame_number))
+                            ret, frame_image = cap.read()
+                            if ret:
+                                _, buffer = cv2.imencode('.jpg', frame_image, [cv2.IMWRITE_JPEG_QUALITY, 60])
+                                frame_base64 = base64.b64encode(buffer).decode('utf-8')
+                                key_moments.append({
+                                    'timestamp': safe_convert_to_python_types(timestamp_sec),
+                                    'reason': f'{emotion.capitalize()} increased by {((current_value - previous_value)*100):.0f}%',
+                                    'faceFrame': frame_base64,
+                                    'type': 'emotion_spike',
+                                    'frameNumber': int(frame_number)
+                                })
+                                processed_frames_for_spikes.add(frame_number)
+                                break
+                    except Exception as e:
+                        logger.warning(f"Error processing emotion {emotion} at frame {i}: {e}")
+                        continue
+        except Exception as e:
+            logger.error(f"Error extracting key moments: {e}", exc_info=True)
+        finally:
+            if cap:
+                cap.release()
+                
     except Exception as e:
-        logger.error(f"Error extracting key moments: {e}", exc_info=True)
-    finally:
-        if cap:
-            cap.release()
-            
+        logger.error(f"Error in extract_emotional_key_moments: {e}")
+    
     return key_moments
 
 def calculate_summary_metrics(results: pd.DataFrame, config: AnalysisConfig, video_path: str, video_fps: float) -> Dict[str, Any]:
     """Calculate summary metrics from the analysis results."""
-    summary = {
-        "total_frames": len(results),
-        "faces_detected": len(results[results['FaceScore'] > config.detection_threshold]) if 'FaceScore' in results.columns else len(results),
-        "processing_config": {
-            "frame_skip": config.frame_skip,
-            "analysis_type": config.analysis_type.value,
-            "detection_threshold": config.detection_threshold
+    try:
+        summary = {
+            "total_frames": int(len(results)),
+            "faces_detected": int(len(results[results['FaceScore'] > config.detection_threshold])) if 'FaceScore' in results.columns else int(len(results)),
+            "processing_config": {
+                "frame_skip": config.frame_skip,
+                "analysis_type": config.analysis_type.value,
+                "detection_threshold": config.detection_threshold
+            }
         }
-    }
-    
-    if config.analysis_type in [AnalysisType.EMOTIONS, AnalysisType.COMBINED]:
-        summary["emotions"] = analyze_emotions(results)
-    
-    if config.analysis_type in [AnalysisType.AUS, AnalysisType.COMBINED]:
-        summary["action_units"] = analyze_action_units(results)
+        
+        if config.analysis_type in [AnalysisType.EMOTIONS, AnalysisType.COMBINED]:
+            summary["emotions"] = analyze_emotions(results)
+        
+        if config.analysis_type in [AnalysisType.AUS, AnalysisType.COMBINED]:
+            summary["action_units"] = analyze_action_units(results)
 
-    if config.analysis_type in [AnalysisType.EMOTIONS, AnalysisType.COMBINED]:
-        summary["emotional_key_moments"] = extract_emotional_key_moments(
-            video_path, results, video_fps, 0.3
-        )
-    else:
-        summary["emotional_key_moments"] = []
-    
-    return summary
+        if config.analysis_type in [AnalysisType.EMOTIONS, AnalysisType.COMBINED]:
+            summary["emotional_key_moments"] = extract_emotional_key_moments(
+                video_path, results, video_fps, 0.3
+            )
+        else:
+            summary["emotional_key_moments"] = []
+        
+        return summary
+    except Exception as e:
+        logger.error(f"Error in calculate_summary_metrics: {e}")
+        return {
+            "total_frames": 0,
+            "faces_detected": 0,
+            "processing_config": {
+                "frame_skip": config.frame_skip,
+                "analysis_type": config.analysis_type.value,
+                "detection_threshold": config.detection_threshold
+            },
+            "emotions": {},
+            "action_units": {},
+            "emotional_key_moments": []
+        }
 
 async def analyze_facial_expressions(file_content: bytes, filename: str, content_type: str, settings: Optional[str] = None):
     """
