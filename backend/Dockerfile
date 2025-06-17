@@ -1,29 +1,34 @@
-# Use a single stage for simplicity and reliability
-FROM python:3.10-slim
+# Use an NVIDIA CUDA base image that includes the necessary drivers
+FROM nvidia/cuda:11.7.1-base-ubuntu22.04
 
-WORKDIR /app
+# Avoid prompts during apt-get installations
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install system dependencies
+# Install Python 3.10 and other necessary tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+    python3.10 \
+    python3-pip \
     libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install them globally.
+# Create a symlink so 'python' points to 'python3.10'
+RUN ln -s /usr/bin/python3.10 /usr/bin/python
+
+WORKDIR /app
+
+# Copy and install Python dependencies. This will include the GPU-enabled torch.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the py-feat models. They will be stored in the image.
-# We run this as the root user, so they go into /root/.local/share/py-feat
-RUN python -c "from feat import Detector; Detector()"
+# DO NOT pre-download models here. They will be downloaded on the first run in the GPU environment.
 
 # Copy the application code
 COPY . .
 
-# Expose the port the app runs on
+# Expose the port
 EXPOSE 8000
 
-# Run the application as the default root user.
-# While not ideal for production security, this simplifies pathing for this demo.
+# Run the application. When it starts on Cloud Run, get_detector() will be called,
+# and it will download the models and use the available GPU.
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

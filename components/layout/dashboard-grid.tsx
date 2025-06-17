@@ -4,7 +4,7 @@ import { EmotionTimeline } from '../analysis/emotional-timeline';
 import { AuHeatmap } from '../analysis/au-heatmap';
 import { EmotionDistribution } from '../analysis/emotion-distribution';
 import { KeyMomentsDisplay, KeyMoment } from '../analysis/key-moments-display';
-import { TrendingUp, Users, Clock, Sparkles, Zap, Target, Trophy } from 'lucide-react';
+import { TrendingUp, Users, Clock, Sparkles, Zap, Target } from 'lucide-react';
 
 interface Settings {
   frameSkip: number;
@@ -201,20 +201,9 @@ export function DashboardGrid({
 
       {/* Key Moments Display */}
       {(analysisResults || gameKeyMoments.length > 0) && (
-        <Card variant="yellow">
-          <CardHeader className="border-b-4 border-black bg-gradient-to-r from-pink-400 to-orange-400">
-            <CardTitle className="flex items-center gap-3 text-black">
-              <Trophy className="h-6 w-6" />
-              KEY MOMENTS OF CHAOS
-              <Trophy className="h-6 w-6" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="border-4 border-black shadow-[8px_8px_0px_0px_#000] bg-white p-4">
-              <KeyMomentsDisplay moments={combinedKeyMoments} />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mt-6">
+          <KeyMomentsDisplay moments={combinedKeyMoments} />
+        </div>
       )}
     </div>
   );

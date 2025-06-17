@@ -58,11 +58,12 @@ def get_detector():
     if detector is None:
         try:
             from feat import Detector
-            logger.info("Initializing py-feat detector...")
-            detector = Detector()
-            logger.info("Detector initialized successfully!")
+            logger.info("Initializing py-feat detector for GPU...")
+            # This is the key change: telling the detector to use the CUDA device (GPU)
+            detector = Detector(device="cuda")
+            logger.info("Detector initialized successfully on GPU!")
         except Exception as e:
-            logger.error(f"Failed to initialize py-feat detector: {e}")
+            logger.error(f"Failed to initialize py-feat detector on GPU: {e}")
             raise
     return detector
 

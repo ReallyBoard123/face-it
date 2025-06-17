@@ -1,21 +1,22 @@
 # Core dependencies
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.9
+fastapi
+uvicorn
+python-multipart
 
 # Data processing
 numpy==1.23.5
-pandas==2.0.3
+pandas
 scipy==1.10.1
 
 # Computer vision
-opencv-python==4.8.1.78
-Pillow==10.0.1
+opencv-python
+Pillow
 
-# Explicitly install CPU-optimized PyTorch using an extra index URL
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.0.1+cpu
-torchvision==0.15.2+cpu
+# Explicitly install the GPU version of PyTorch first
+# This version is compatible with the CUDA version in the Docker image we will use
+--extra-index-url https://download.pytorch.org/whl/cu117
+torch==1.13.1+cu117
+torchvision==0.14.1+cu117
 
 # Facial expression analysis
-py-feat==0.6.2
+py-feat

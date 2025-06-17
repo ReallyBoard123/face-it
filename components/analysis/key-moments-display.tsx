@@ -51,7 +51,7 @@ const getCardVariantForType = (type: string, reason: string) => {
 };
 
 export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
   
   const toggleVisibility = () => {
     setIsVisible(!isVisible);
@@ -64,7 +64,7 @@ export function KeyMomentsDisplay({ moments }: KeyMomentsDisplayProps) {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-3 text-black">
               <Target className="h-6 w-6" />
-              KEY MOMENTS OF CHAOS
+              NO EPIC MOMENTS DETECTED!
               <Sparkles className="h-6 w-6" />
             </CardTitle>
             <Button
