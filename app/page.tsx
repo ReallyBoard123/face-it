@@ -7,7 +7,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar';
 import { DashboardGrid } from '@/components/layout/dashboard-grid';
 import { VideoPreview } from '@/components/video/video-preview';
 import { RecordingSessionManager } from '@/components/recording/recording-session-manager';
-import { EyeTrackingPanel } from '@/components/eye-tracking/eye-tracking-panel';
+import { EyeTrackingSwitch } from '@/components/eye-tracking/eye-tracking-switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from "@/components/ui/separator";
 import {
@@ -126,8 +126,11 @@ export default function Home() {
       <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3">
         <Separator orientation="vertical" className={`mr-2 h-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
         <div className="text-lg md:text-2xl font-bold">FaceIt Analysis</div>
-        <div className="ml-auto text-sm text-muted-foreground capitalize hidden sm:block">
-          {recordingFlow.flowState.replace(/_/g, ' ')}
+        <div className="flex items-center gap-4 ml-auto">
+          <EyeTrackingSwitch className="hidden sm:flex" />
+          <div className="text-sm text-muted-foreground capitalize hidden sm:block">
+            {recordingFlow.flowState.replace(/_/g, ' ')}
+          </div>
         </div>
       </header>
     );
@@ -291,9 +294,6 @@ export default function Home() {
           </div>
         </main>
       </SidebarInset>
-
-      {/* Eye Tracking Panel - Self-contained */}
-      <EyeTrackingPanel />
     </SidebarProvider>
   );
 }

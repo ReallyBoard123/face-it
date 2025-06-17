@@ -50,11 +50,11 @@ export function useWebGazer() {
       
       webgazerRef.current = webgazer;
 
-      // Configure WebGazer
+      // Configure WebGazer - show prediction points from the start
       webgazer
         .setRegression('ridge')
         .setTracker('TFFacemesh')
-        .showPredictionPoints(false)
+        .showPredictionPoints(true) // Show points for immediate visual feedback
         .showVideo(false)
         .showFaceOverlay(false)
         .showFaceFeedbackBox(false)
@@ -92,9 +92,10 @@ export function useWebGazer() {
   const startCalibration = useCallback(async () => {
     const success = await initWebGazer();
     if (success) {
+      // Prediction points are already enabled by default config
       setIsCalibrating(true);
       setCalibrationPoint(0);
-      toast.info('Calibration started - click each red dot while looking at it');
+      toast.info('Calibration started - watch the prediction dot improve as you click each red dot!');
     }
     return success;
   }, [initWebGazer]);
@@ -103,9 +104,10 @@ export function useWebGazer() {
     if (calibrationPoint < 19) { // 20 points (0-19)
       setCalibrationPoint(prev => prev + 1);
     } else {
+      // Calibration complete - prediction points remain visible
       setIsCalibrating(false);
       setIsEnabled(true);
-      toast.success('Calibration complete! Eye tracking fully active.');
+      toast.success('Calibration complete! Eye tracking is now active and accurate.');
     }
   }, [calibrationPoint]);
 
@@ -117,6 +119,7 @@ export function useWebGazer() {
 
   const stopEyeTracking = useCallback(() => {
     if (webgazerRef.current) {
+      webgazerRef.current.showPredictionPoints(false);
       webgazerRef.current.end();
       webgazerRef.current = null;
     }
@@ -125,6 +128,12 @@ export function useWebGazer() {
     setGazeData([]);
     toast.info('Eye tracking stopped.');
   }, []);
+
+  const togglePredictionPoints = useCallback((show: boolean) => {
+    if (webgazerRef.current && isEnabled && !isCalibrating) {
+      webgazerRef.current.showPredictionPoints(show);
+    }
+  }, [isEnabled, isCalibrating]);
 
   useEffect(() => {
     return () => {
@@ -143,5 +152,6 @@ export function useWebGazer() {
     nextCalibrationPoint,
     stopEyeTracking,
     getCurrentCalibrationPoint,
+    togglePredictionPoints,
   };
 }
