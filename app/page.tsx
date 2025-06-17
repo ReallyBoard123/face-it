@@ -320,7 +320,7 @@ export default function Home() {
                           <Button
                             onClick={() => setShowScreenPreview(!showScreenPreview)}
                             variant="ghost"
-                            size="sm"
+                            size="sm" 
                             className="border-4 border-black"
                           >
                             {showScreenPreview ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}

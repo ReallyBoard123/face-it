@@ -4,7 +4,7 @@
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Loader2, Play, Monitor, Zap, Target, AlertTriangle, Sparkles, Clock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 type GameFlowState = "idle" | "permissions_pending" | "permissions_denied" | "ready_to_start" | "game_active_recording" | "website_browsing_recording" | "analyzing" | "results_ready";
 
@@ -34,20 +34,29 @@ export function SessionStatus({
   getSessionTitle,
 }: SessionStatusProps) {
   const [cooldown, setCooldown] = useState(0);
+  const cooldownRef = useRef(cooldown);
+  
+  // Keep the ref in sync with state
+  useEffect(() => {
+    cooldownRef.current = cooldown;
+  }, [cooldown]);
 
   useEffect(() => {
-    if (flowState !== 'results_ready') return;
-    
-    // Reset cooldown when first entering results_ready
-    if (cooldown === 0) {
-      setCooldown(10);
-      return; // Early return to prevent setting up the timer until next render
+    if (flowState !== 'results_ready') {
+      // Reset cooldown when not in results_ready state
+      if (cooldownRef.current > 0) {
+        setCooldown(0);
+      }
+      return;
     }
-
+    
+    // Set initial cooldown when entering results_ready
+    setCooldown(10);
+    
     // Set up the countdown timer
     const timer = setInterval(() => {
-      setCooldown((prev) => {
-        if (prev <= 0) {
+      setCooldown(prev => {
+        if (prev <= 1) {
           clearInterval(timer);
           return 0;
         }
@@ -55,9 +64,9 @@ export function SessionStatus({
       });
     }, 1000);
 
-    // Clean up the interval when component unmounts or dependencies change
+    // Clean up the interval when component unmounts or flowState changes
     return () => clearInterval(timer);
-  }, [flowState, cooldown]); // Added cooldown to dependencies
+  }, [flowState]); // Only depend on flowState
   const formatTime = (seconds: number) => {
     return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
   };
