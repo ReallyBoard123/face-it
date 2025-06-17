@@ -23,6 +23,10 @@ export interface VideoRecorderHandles {
   captureFrame: () => string | null; // Added for capturing current frame
 }
 
+interface MediaRecorderErrorEvent extends Event {
+  error: DOMException | null;
+}
+
 const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
   ({
     onVideoRecorded,
@@ -62,6 +66,15 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
       }
     }, []);
 
+    const stopManualRecording = useCallback(() => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecordingInternal(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
+    }, []);
+
     const startManualRecording = useCallback(async () => {
       let streamToRecord = stream;
       if (!streamToRecord) {
@@ -83,11 +96,13 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
             videoRef.current.srcObject = streamToRecord;
         }
 
-        const options = { mimeType: 'video/webm;codecs=vp8,opus' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-            console.warn(`${options.mimeType} is not supported, trying default.`);
-            // @ts-ignore
-            delete options.mimeType;
+        // Use type assertion to handle the mimeType option safely
+        const options: MediaRecorderOptions = {};
+        const mimeType = 'video/webm;codecs=vp8,opus';
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+            options.mimeType = mimeType;
+        } else {
+            console.warn(`${mimeType} is not supported, using default.`);
         }
         const mediaRecorder = new MediaRecorder(streamToRecord, options);
         mediaRecorderRef.current = mediaRecorder;
@@ -102,11 +117,9 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
           if (onRecordingStopped) onRecordingStopped(blob);
         };
         
-        mediaRecorder.onerror = (event) => {
-            // @ts-ignore
+        mediaRecorder.onerror = (event: MediaRecorderErrorEvent) => {
             console.error("MediaRecorder error:", event.error);
-            // @ts-ignore
-            setError(`MediaRecorder error: ${event.error.name} - ${event.error.message}`);
+            setError(`MediaRecorder error: ${event.error?.name} - ${event.error?.message}`);
             setIsRecordingInternal(false);
             if (timerRef.current) clearInterval(timerRef.current);
             if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
@@ -129,16 +142,7 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
         setError(`Failed to start recording: ${err instanceof Error ? err.message : String(err)}`);
         setIsRecordingInternal(false);
       }
-    }, [stream, isRecordingInternal, onVideoRecorded, recordingDuration, onRecordingStarted, onRecordingStopped, requestPermissionsAndSetupStream]);
-
-    const stopManualRecording = useCallback(() => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
-      setIsRecordingInternal(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
-    }, []);
+    }, [stream, isRecordingInternal, onVideoRecorded, recordingDuration, onRecordingStarted, onRecordingStopped, requestPermissionsAndSetupStream, stopManualRecording]);
 
     const captureCurrentFrameAsBase64 = useCallback((): string | null => {
         if (videoRef.current && videoRef.current.readyState >= videoRef.current.HAVE_CURRENT_DATA && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {

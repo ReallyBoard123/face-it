@@ -22,10 +22,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
+type AnalysisTypeString = "emotions" | "aus" | "combined" | "landmarks";
+type VisualizationStyleString = "timeline" | "heatmap" | "distribution";
+
 interface Settings {
   frameSkip: number;
-  analysisType: string;
-  visualizationStyle: string;
+  analysisType: AnalysisTypeString;
+  visualizationStyle: VisualizationStyleString;
   detectionThreshold: number;
   batchSize: number;
 }

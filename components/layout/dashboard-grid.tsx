@@ -20,9 +20,15 @@ interface GameEvent {
   timestamp: number;
 }
 
+interface TimelineData {
+  timestamps?: number[];
+  [emotion: string]: number[] | undefined;
+}
+
 interface EmotionStats {
   mean: number;
-  [key: string]: unknown;
+  max: number;
+  peaks?: Array<unknown>;
 }
 
 interface AnalysisResults {
@@ -32,6 +38,14 @@ interface AnalysisResults {
       total_frames?: number;
       emotions?: {
         statistics?: Record<string, EmotionStats>;
+        timeline?: TimelineData;
+      };
+      action_units?: {
+        statistics?: Record<string, {
+          mean: number;
+          activation_rate: number;
+          max_intensity: number;
+        }>;
       };
       emotional_key_moments?: KeyMoment[];
     };

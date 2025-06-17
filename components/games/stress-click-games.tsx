@@ -248,8 +248,8 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
   }, [gameActive, currentDifficultySetting, stats.level, emitGameEvent, handleTargetMiss]);
 
 
-  const handleTargetHit = useCallback((targetId: string) => {
-    const hitTargetDetails = targets.find(t => t.id === targetId);
+  const handleTargetHit = useCallback((targetId: string, currentTargets: Target[]) => {
+    const hitTargetDetails = currentTargets.find(t => t.id === targetId);
     if (!gameActive || !hitTargetDetails) return; // Ensure game is active and target exists
 
     const reactionTime = Date.now() - hitTargetDetails.spawnTime;
@@ -268,7 +268,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     });
     
     // Visual feedback (remains the same)
-  }, [gameActive, targets, emitGameEvent]); // Removed stats.level, stats.score to use from setStats(prev => ...)
+  }, [gameActive, emitGameEvent]); // Removed targets dependency, pass as parameter instead
 
   const startGameFlow = () => {
     console.log('[startGameFlow] Initializing game...');
@@ -318,10 +318,13 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
       currentTimers.forEach(clearTimeout);
       targetRemovalTimersRef.current.clear();
       
-      targets.forEach(t => {
-        if (t.moveIntervalId) clearInterval(t.moveIntervalId);
+      // Clear targets with movement intervals
+      setTargets(prevTargets => {
+        prevTargets.forEach(t => {
+          if (t.moveIntervalId) clearInterval(t.moveIntervalId);
+        });
+        return [];
       });
-      setTargets([]); // Clear visual targets
     }
 
     // Cleanup function for this effect instance
@@ -353,17 +356,28 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
     }
   }, [stats.score, stats.level, gameActive, calculateLevelFromScore, emitGameEvent]);
 
-
   // General cleanup for component unmount
   useEffect(() => {
+    // Capture current ref values when the effect runs
+    const currentGameTimer = gameTimerRef.current;
+    const currentSpawnTimer = spawnTimerRef.current;
+    const currentTargetRemovalTimers = new Map(targetRemovalTimersRef.current);
+
     return () => {
       console.log('[StressClickGame] Component Unmounting. Clearing all timers.');
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-      if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
-      // Create a copy of the current map to avoid ref issues
-      const currentTimers = new Map(targetRemovalTimersRef.current);
-      currentTimers.forEach(clearTimeout);
-      targets.forEach(t => { if (t.moveIntervalId) clearInterval(t.moveIntervalId); });
+      if (currentGameTimer) clearInterval(currentGameTimer);
+      if (currentSpawnTimer) clearTimeout(currentSpawnTimer);
+      
+      // Use the captured timers map
+      currentTargetRemovalTimers.forEach(clearTimeout);
+      
+      // Clear any movement intervals from targets
+      setTargets(prevTargets => {
+        prevTargets.forEach(t => { 
+          if (t.moveIntervalId) clearInterval(t.moveIntervalId); 
+        });
+        return [];
+      });
     };
   }, []); // Empty: runs on unmount only
 
@@ -460,7 +474,7 @@ export const StressClickGame: React.FC<StressClickGameProps> = ({
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                if (gameActive) handleTargetHit(target.id);
+                if (gameActive) handleTargetHit(target.id, targets);
               }}
             />
           ))}

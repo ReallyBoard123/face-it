@@ -141,7 +141,7 @@ export default function Home() {
       {!isActiveSession && (
         <AppSidebar 
           settings={settings} 
-          onSettingsChange={setSettings}
+          onSettingsChange={(newSettings) => setSettings(newSettings)}
         />
       )}
       <SidebarInset>

@@ -20,6 +20,10 @@ export interface ScreenRecorderHandles {
   getStream: () => MediaStream | null;
 }
 
+interface MediaRecorderErrorEvent extends Event {
+  error?: Error;
+}
+
 const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
   ({
     onScreenRecorded,
@@ -47,28 +51,44 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
 
         // For current tab recording, we can be more specific
         if (recordingMode === 'current_tab') {
-          // @ts-ignore - preferCurrentTab is experimental but works in Chrome
-          constraints.preferCurrentTab = true;
+          // Use type assertion with a more specific type for the constraints
+          (constraints as DisplayMediaStreamOptions & { preferCurrentTab?: boolean }).preferCurrentTab = true;
         }
 
         const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
         setScreenStream(stream);
         setHasPermission(true);
         return stream;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error accessing screen capture:', err);
         setHasPermission(false);
         
-        if (err.name === 'NotAllowedError') {
-          setError('Screen capture permission denied. Please allow screen sharing.');
-        } else if (err.name === 'NotSupportedError') {
-          setError('Screen capture not supported in this browser.');
+        if (err instanceof Error) {
+          if (err.name === 'NotAllowedError') {
+            setError('Screen capture permission denied. Please allow screen sharing.');
+          } else if (err.name === 'NotSupportedError') {
+            setError('Screen capture not supported in this browser.');
+          } else {
+            setError(`Screen capture error: ${err.message}`);
+          }
         } else {
-          setError(`Screen capture error: ${err.message}`);
+          setError('Unknown screen capture error occurred.');
         }
         return null;
       }
     }, [recordingMode]);
+
+    const stopScreenRecording = useCallback(() => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      
+      // Stop the screen stream
+      if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        setScreenStream(null);
+      }
+    }, [screenStream]);
 
     const startScreenRecording = useCallback(async () => {
       let streamToRecord = screenStream;
@@ -81,11 +101,13 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
       try {
         chunksRef.current = [];
 
-        const options = { mimeType: 'video/webm;codecs=vp8,opus' };
-        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-          console.warn(`${options.mimeType} not supported, using default`);
-          // @ts-ignore
-          delete options.mimeType;
+        // Use type assertion to handle the mimeType option safely
+        const options: MediaRecorderOptions = {};
+        const mimeType = 'video/webm;codecs=vp8,opus';
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          options.mimeType = mimeType;
+        } else {
+          console.warn(`${mimeType} not supported, using default`);
         }
 
         const mediaRecorder = new MediaRecorder(streamToRecord, options);
@@ -103,7 +125,7 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
           if (onRecordingStopped) onRecordingStopped();
         };
 
-        mediaRecorder.onerror = (event: any) => {
+        mediaRecorder.onerror = (event: MediaRecorderErrorEvent) => {
           console.error("Screen MediaRecorder error:", event.error);
           setError(`Recording error: ${event.error?.message || 'Unknown error'}`);
         };
@@ -116,23 +138,12 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
 
         mediaRecorder.start();
         if (onRecordingStarted) onRecordingStarted();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error starting screen recording:', err);
-        setError(`Failed to start recording: ${err.message}`);
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+        setError(`Failed to start recording: ${errorMessage}`);
       }
-    }, [screenStream, onScreenRecorded, onRecordingStarted, onRecordingStopped, requestScreenCapture]);
-
-    const stopScreenRecording = useCallback(() => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
-      
-      // Stop the screen stream
-      if (screenStream) {
-        screenStream.getTracks().forEach(track => track.stop());
-        setScreenStream(null);
-      }
-    }, [screenStream]);
+    }, [screenStream, onScreenRecorded, onRecordingStarted, onRecordingStopped, requestScreenCapture, stopScreenRecording]);
 
     useImperativeHandle(ref, () => ({
       startRecording: startScreenRecording,
