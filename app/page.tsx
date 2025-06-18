@@ -125,7 +125,7 @@ export default function Home() {
     return (
       <header className="flex h-16 shrink-0 items-center gap-2 border-b px-3">
         <Separator orientation="vertical" className={`mr-2 h-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
-        <div className="text-lg md:text-2xl font-bold">FaceIt Analysis</div>
+        <div className="text-lg md:text-2xl font-bold">Face It Analysis</div>
         <div className="flex items-center gap-4 ml-auto">
           <EyeTrackingSwitch className="hidden sm:flex" />
           <div className="text-sm text-muted-foreground capitalize hidden sm:block">
