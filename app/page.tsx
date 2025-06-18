@@ -171,7 +171,7 @@ export default function Home() {
         <Separator orientation="vertical" className={`mr-2 h-8 border-black border-l-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
         <div className="neo-text-title text-black flex items-center gap-3">
           <Sparkles className="h-8 w-8 md:h-12 md:w-12" />
-          FACEIT
+          FACE IT
           <Zap className="h-8 w-8 md:h-12 md:w-12" />
         </div>
         <div className="flex items-center gap-4 ml-auto">
