@@ -1,4 +1,4 @@
-// app/page.tsx
+// app/page.tsx - Updated for Async Job Processing
 'use client';
 
 import React, { useEffect, useCallback, useState } from 'react';
@@ -10,17 +10,21 @@ import { RecordingSessionManager } from '@/components/recording/recording-sessio
 import { EyeTrackingSwitch } from '@/components/eye-tracking/eye-tracking-switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Target, Gamepad2, Globe, Sparkles, Zap, Eye, EyeOff, Server, Wifi, Clock, X } from 'lucide-react';
 import { StressClickGame } from '@/components/games/stress-click-games';
 import FlappyBirdGame from '@/components/games/flappy-bird';
 import { useRecordingFlow } from '@/hooks/use-recording-flow';
 import { useGameEvents } from '@/hooks/use-game-events';
 import { useWebsiteSession } from '@/hooks/use-website-session';
+import { useBackendService } from '@/hooks/use-backend-service';
+import { backendService } from '@/lib/backend-service';
+import { toast } from 'sonner';
 
 type AnalysisTypeString = "emotions" | "aus" | "combined" | "landmarks";
 type VisualizationStyleString = "timeline" | "heatmap" | "distribution";
@@ -31,11 +35,18 @@ export default function Home() {
     analysisType: 'emotions' as AnalysisTypeString,
     visualizationStyle: 'timeline' as VisualizationStyleString, 
     detectionThreshold: 0.5, 
-    batchSize: 1,
+    batchSize: 4, // Increased for better performance
   });
+
+  // NEW: Job tracking state
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [analysisMessage, setAnalysisMessage] = useState('');
+  const [estimatedTimeMinutes, setEstimatedTimeMinutes] = useState<number | null>(null);
 
   const recordingFlow = useRecordingFlow();
   const [showScreenPreview, setShowScreenPreview] = useState(false);
+  const backendServiceHook = useBackendService();
   const websiteSession = useWebsiteSession();
   const videoRecorderRef = React.useRef<VideoRecorderHandles>(null);
   const gameEvents = useGameEvents(
@@ -45,44 +56,77 @@ export default function Home() {
     recordingFlow.setErrorMessage
   );
 
-  // Memoize analyzeVideo to prevent useEffect dependency issues
+  // NEW: Updated analyzeVideo function with async job processing
   const analyzeVideo = useCallback(async (videoBlob: Blob) => {
     recordingFlow.setIsAnalyzingBackend(true);
     recordingFlow.setErrorMessage(null);
-    
-    const formData = new FormData();
-    formData.append('file', videoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
-    
-    if (recordingFlow.recordedScreenBlob) {
-      formData.append('screen_file', recordingFlow.recordedScreenBlob, 'screen-recording.webm');
-    }
-    
-    formData.append('settings', JSON.stringify(settings));
+    setAnalysisProgress(0);
+    setAnalysisMessage('Submitting video for analysis...');
     
     try {
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', body: formData });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail?.message || 'Analysis server error.');
-      }
-      const data = await response.json();
-      if (data.status === "nodata") {
-        recordingFlow.setErrorMessage(data.message || "No analysis data returned from server.");
-        recordingFlow.setAnalysisResults(null);
-        recordingFlow.setFlowState("ready_to_start");
-      } else {
-        recordingFlow.setAnalysisResults(data);
-        recordingFlow.setFlowState("results_ready");
-      }
+      // Submit job
+      const jobResponse = await backendService.submitVideoAnalysis(
+        videoBlob, 
+        settings,
+        Date.now().toString() // Simple session ID
+      );
+      
+      setCurrentJobId(jobResponse.job_id);
+      setEstimatedTimeMinutes(jobResponse.estimated_time_minutes || null);
+      setAnalysisMessage('Analysis queued. Processing will begin shortly...');
+      
+      toast.success(`✅ Analysis job submitted! Job ID: ${jobResponse.job_id.slice(0, 8)}...`);
+      
+      // Poll for results with progress updates
+      const result = await backendService.pollJobUntilComplete(
+        jobResponse.job_id,
+        (progress, message) => {
+          setAnalysisProgress(progress * 100);
+          setAnalysisMessage(message);
+        },
+        2000, // Poll every 2 seconds
+        30    // Max 30 minutes
+      );
+      
+      // Success
+      recordingFlow.setAnalysisResults(result);
+      recordingFlow.setFlowState("results_ready");
+      setAnalysisProgress(100);
+      setAnalysisMessage('Analysis completed successfully!');
+      
+      toast.success('🎉 Video analysis completed!');
+      
     } catch (error) {
-      console.error('Analysis fetch error:', error);
-      recordingFlow.setErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Analysis error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Analysis failed';
+      recordingFlow.setErrorMessage(errorMessage);
       recordingFlow.setFlowState("ready_to_start");
+      setAnalysisProgress(0);
+      setAnalysisMessage('');
+      
+      toast.error(`❌ ${errorMessage}`);
     } finally {
       recordingFlow.setIsAnalyzingBackend(false);
+      setCurrentJobId(null);
     }
   }, [recordingFlow, settings]);
+
+  // NEW: Cancel analysis function
+  const cancelAnalysis = useCallback(async () => {
+    if (currentJobId) {
+      try {
+        await backendService.cancelJob(currentJobId);
+        recordingFlow.setIsAnalyzingBackend(false);
+        recordingFlow.setFlowState("ready_to_start");
+        setCurrentJobId(null);
+        setAnalysisProgress(0);
+        setAnalysisMessage('');
+        toast.info('Analysis cancelled');
+      } catch (error) {
+        console.warn('Failed to cancel job:', error);
+      }
+    }
+  }, [currentJobId, recordingFlow]);
 
   // Handle video recording completion
   const handleVideoRecorded = useCallback((blob: Blob) => {
@@ -116,11 +160,46 @@ export default function Home() {
     }
   }, [recordingFlow, recordingFlow.recordedVideoBlob, recordingFlow.recordedScreenBlob, recordingFlow.flowState, recordingFlow.setFlowState, analyzeVideo]);
 
-  const handleReset = useCallback(() => {
+  // Reset function with job cancellation
+  const handleReset = useCallback(async () => {
+    // Cancel any active job
+    if (currentJobId) {
+      await cancelAnalysis();
+    }
+    
+    // Frontend cleanup
     recordingFlow.resetFlow();
     gameEvents.resetGameEvents();
     websiteSession.cleanup();
-  }, [recordingFlow, gameEvents, websiteSession]);
+    
+    // Reset analysis state
+    setCurrentJobId(null);
+    setAnalysisProgress(0);
+    setAnalysisMessage('');
+    setEstimatedTimeMinutes(null);
+    
+    // Prepare backend for new session
+    try {
+      await backendServiceHook.prepareNewSession();
+    } catch {
+      console.warn('Backend preparation failed, but frontend reset completed');
+    }
+  }, [currentJobId, cancelAnalysis, recordingFlow, gameEvents, websiteSession, backendServiceHook]);
+
+  // Check server health on startup
+  useEffect(() => {
+    const checkServerOnStartup = async () => {
+      try {
+        await backendServiceHook.healthCheck();
+        console.log('Initial server health check completed');
+      } catch (error) {
+        console.warn('Initial server health check failed:', error);
+        toast.warning('⚠️ Backend server may not be running.');
+      }
+    };
+
+    checkServerOnStartup();
+  }, [backendServiceHook]);
 
   const getStatusColors = (state: string) => {
     switch (state) {
@@ -136,6 +215,53 @@ export default function Home() {
     }
   };
 
+  // NEW: Progress display component
+  const AnalysisProgressDisplay = () => {
+    if (!recordingFlow.isAnalyzingBackend) return null;
+
+    return (
+      <Card className="border-4 border-black bg-yellow-200">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between text-black font-black uppercase">
+            <span className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              VIDEO ANALYSIS IN PROGRESS
+            </span>
+            {currentJobId && (
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={cancelAnalysis}
+                className="font-black uppercase"
+              >
+                <X className="h-4 w-4 mr-1" />
+                CANCEL
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Progress value={analysisProgress} className="h-3 border-2 border-black" />
+          <div className="text-sm font-bold text-black">
+            <p>{analysisMessage}</p>
+            <p>{analysisProgress.toFixed(0)}% Complete</p>
+            {estimatedTimeMinutes && (
+              <p className="flex items-center gap-1 text-xs">
+                <Clock className="h-3 w-3" />
+                Estimated: {estimatedTimeMinutes.toFixed(1)} minutes
+              </p>
+            )}
+            {currentJobId && (
+              <p className="text-xs text-black/70">
+                Job ID: {currentJobId.slice(0, 8)}...
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const PageHeader = () => {
     const isActiveSession = recordingFlow.flowState === 'game_active_recording' || recordingFlow.flowState === 'website_browsing_recording';
     return (
@@ -143,11 +269,31 @@ export default function Home() {
         <Separator orientation="vertical" className={`mr-2 h-8 border-black border-l-4 ${isActiveSession ? 'hidden' : 'hidden md:flex'}`} />
         <div className="neo-text-title text-black flex items-center gap-3">
           <Sparkles className="h-8 w-8 md:h-12 md:w-12" />
-          FACEIT
+          FACE IT
           <Zap className="h-8 w-8 md:h-12 md:w-12" />
         </div>
         <div className="flex items-center gap-4 ml-auto">
           <EyeTrackingSwitch className="hidden sm:flex" />
+          
+          {backendServiceHook.isLoading && (
+            <div className="flex items-center gap-2 border-4 border-black neo-orange p-2 font-black text-black uppercase text-xs">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="hidden sm:inline">SERVER CHECK...</span>
+            </div>
+          )}
+          
+          {backendServiceHook.serverStatus && (
+            <div className={`flex items-center gap-2 border-4 border-black p-2 font-black text-black uppercase text-xs ${
+              backendServiceHook.serverStatus.detector_ready ? 'neo-green' : 'neo-orange'
+            }`}>
+              {backendServiceHook.serverStatus.detector_ready ? (
+                <><Server className="h-4 w-4" />READY!</>
+              ) : (
+                <><Wifi className="h-4 w-4" />LOADING...</>
+              )}
+            </div>
+          )}
+          
           <div className={`text-lg font-black uppercase tracking-wider p-3 rounded-none border-4 border-black ${getStatusColors(recordingFlow.flowState)} hidden sm:block`}>
             {recordingFlow.flowState.replace(/_/g, ' ')}
           </div>
@@ -174,167 +320,99 @@ export default function Home() {
             <div className={`grid gap-8 ${isActiveSession ? 'grid-cols-1 md:grid-cols-3 h-[calc(100vh-8rem)]' : 'grid-cols-1'}`}>
               
               {/* Recording Session Manager */}
-              <div className={`${isActiveSession ? 'md:col-span-1' : 'max-w-4xl mx-auto w-full'}`}>
-                <Card variant="purple" className="h-full">
-                  <RecordingSessionManager
-                    // State from recording flow hook
-                    flowState={recordingFlow.flowState}
-                    selectedGame={recordingFlow.selectedGame}
-                    isScreenRecording={recordingFlow.isScreenRecording}
-                    countdown={recordingFlow.countdown}
-                    errorMessage={recordingFlow.errorMessage}
-                    isAnalyzingBackend={recordingFlow.isAnalyzingBackend}
-                    
-                    // State setters
-                    setFlowState={recordingFlow.setFlowState}
-                    setSelectedGame={recordingFlow.setSelectedGame}
-                    setIsScreenRecording={recordingFlow.setIsScreenRecording}
-                    setErrorMessage={recordingFlow.setErrorMessage}
-                    
-                    // Event handlers
-                    onVideoRecorded={handleVideoRecorded}
-                    onScreenRecorded={handleScreenRecorded}
-                    onGameEvent={gameEvents.handleGameEvent}
-                    
-                    // Website session data
-                    websiteUrl={websiteSession.websiteUrl}
-                    setWebsiteUrl={websiteSession.setWebsiteUrl}
-                    websiteTabRef={websiteSession.websiteTabRef}
-                    isValidUrl={websiteSession.isValidUrl}
-                    openWebsiteTab={websiteSession.openWebsiteTab}
-                    startTabMonitoring={websiteSession.startTabMonitoring}
-                    closeWebsiteTab={websiteSession.closeWebsiteTab}
-                    
-                    // Recording refs and actions
-                    gameStartTimeRef={recordingFlow.gameStartTimeRef}
-                    startCountdown={recordingFlow.startCountdown}
-                    resetFlow={handleReset}
-                  />
-                </Card>
+              <div className={`${isActiveSession ? 'md:col-span-2' : ''}`}>
+                <RecordingSessionManager
+                  flowState={recordingFlow.flowState}
+                  selectedGame={recordingFlow.selectedGame}
+                  isScreenRecording={recordingFlow.isScreenRecording}
+                  countdown={recordingFlow.countdown}
+                  errorMessage={recordingFlow.errorMessage}
+                  isAnalyzingBackend={recordingFlow.isAnalyzingBackend}
+                  setFlowState={recordingFlow.setFlowState}
+                  setSelectedGame={recordingFlow.setSelectedGame}
+                  setIsScreenRecording={recordingFlow.setIsScreenRecording}
+                  setErrorMessage={recordingFlow.setErrorMessage}
+                  onVideoRecorded={handleVideoRecorded}
+                  onScreenRecorded={handleScreenRecorded}
+                  onGameEvent={gameEvents.handleGameEvent}
+                  websiteUrl={websiteSession.websiteUrl}
+                  setWebsiteUrl={websiteSession.setWebsiteUrl}
+                  websiteTabRef={websiteSession.websiteTabRef}
+                  isValidUrl={websiteSession.isValidUrl}
+                  openWebsiteTab={websiteSession.openWebsiteTab}
+                  startTabMonitoring={websiteSession.startTabMonitoring}
+                  closeWebsiteTab={websiteSession.closeWebsiteTab}
+                  gameStartTimeRef={recordingFlow.gameStartTimeRef}
+                  startCountdown={recordingFlow.startCountdown}
+                  resetFlow={handleReset}
+                />
+                
+                {/* NEW: Analysis Progress Display */}
+                {recordingFlow.isAnalyzingBackend && (
+                  <div className="mt-6">
+                    <AnalysisProgressDisplay />
+                  </div>
+                )}
               </div>
-              
-              {/* Active Game Session */}
-              {recordingFlow.flowState === "game_active_recording" && (
-                <div className="md:col-span-2 h-full" id={recordingFlow.selectedGame === 'stress_click' ? 'stress-click-game-area-ref-id' : 'flappy-bird-game-area'}>
-                  <Card variant={recordingFlow.selectedGame === 'stress_click' ? 'green' : 'blue'} className="h-full flex flex-col neo-game-area">
-                    <CardHeader className="py-4">
-                      <CardTitle className="flex items-center gap-3 text-black">
-                        {recordingFlow.selectedGame === 'stress_click' ? (
-                          <><Target className="h-6 w-6" />STRESS CLICK MAYHEM!</>
-                        ) : (
-                          <><Gamepad2 className="h-6 w-6" />FLAPPY BIRD CHAOS!</>
-                        )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-grow flex items-center justify-center p-4 overflow-hidden">
-                      {recordingFlow.selectedGame === 'stress_click' ? (
-                        <StressClickGame 
-                          duration={recordingFlow.DEFAULT_GAME_DURATION_SECONDS} 
-                          onGameEvent={gameEvents.handleGameEvent} 
-                        />
-                      ) : (
-                        <FlappyBirdGame onGameEvent={gameEvents.handleGameEvent} />
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
 
-              {/* Website Browsing Session */}
-              {recordingFlow.flowState === "website_browsing_recording" && (
-                <div className="md:col-span-2 h-full">
-                  <Card variant="cyan" className="h-full flex flex-col">
-                    <CardHeader className="py-4">
-                      <CardTitle className="flex items-center gap-3 text-black">
-                        <Globe className="h-6 w-6" />WEBSITE ADVENTURE MODE!
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-grow flex items-center justify-center p-6 text-center">
-                      <div className="space-y-6">
-                        <div className="text-3xl font-black text-black">🌐 SURF THE WEB!</div>
-                        <Card variant="white" className="p-6 max-w-md">
-                          <div className="text-sm font-bold text-black space-y-2 uppercase">
-                            <p>• Website opened in new tab</p>
-                            <p>• Facial expressions recording</p>
-                            <p>• Screen activity captured</p>
-                            <p>• Click &quot;STOP&quot; when done browsing</p>
-                          </div>
-                        </Card>
-                        <div className="text-xs font-bold text-black border-4 border-black p-3 neo-yellow inline-block">
-                          URL: {websiteSession.websiteUrl}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              
-              {/* Analysis Loading */}
-              {recordingFlow.flowState === "analyzing" && recordingFlow.isAnalyzingBackend && (
-                <div className="col-span-1 md:col-span-3 mt-8 text-center">
-                  <Card variant="orange" className="neo-pulse">
-                    <CardHeader>
-                      <CardTitle className="text-black">
-                        ANALYZING {recordingFlow.selectedGame === 'website_browse' ? 'WEBSITE CHAOS' : 'GAMEPLAY MADNESS'}...
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-6 py-12">
-                      <Loader2 className="h-20 w-20 animate-spin mx-auto text-black" />
-                      <p className="text-lg font-bold text-black uppercase tracking-wider">
-                        CRUNCHING THE DATA{recordingFlow.recordedScreenBlob ? ' & SCREEN ACTIVITY' : ''}...
-                      </p>
-                      <div className="flex justify-center gap-2">
-                        {[...Array(5)].map((_, i) => (
-                          <div 
-                            key={i} 
-                            className="w-4 h-4 neo-pink border-2 border-black animate-bounce"
-                            style={{ animationDelay: `${i * 0.1}s` }}
-                          />
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              
-              {/* Results */}
-              {recordingFlow.flowState === "results_ready" && recordingFlow.analysisResults && (
-                <div className="col-span-1 md:col-span-3 mt-8">
-                  <DashboardGrid 
-                    settings={settings} 
-                    initialResults={recordingFlow.analysisResults} 
-                    videoBlob={recordingFlow.recordedVideoBlob || undefined} 
-                    gameEvents={gameEvents.gameEvents} 
-                    gameKeyMoments={gameEvents.gameKeyMoments} 
-                  />
-                  
-                  {/* Screen Recording Preview */}
-                  {recordingFlow.recordedScreenBlob && (
-                    <Card variant="green" className="mt-8">
-                      <CardHeader className="relative pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="flex items-center gap-3 text-black">
-                            <Globe className="h-6 w-6" />
-                            SCREEN RECORDING PLAYBACK
-                          </CardTitle>
-                          <Button
-                            onClick={() => setShowScreenPreview(!showScreenPreview)}
-                            variant="ghost"
-                            size="sm" 
-                            className="border-4 border-black"
-                          >
-                            {showScreenPreview ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
-                          </Button>
-                        </div>
+              {/* Game/Content Area */}
+              {isActiveSession && (
+                <div className="space-y-6">
+                  {recordingFlow.selectedGame === 'stress_click' && (
+                    <StressClickGame
+                      duration={recordingFlow.DEFAULT_GAME_DURATION_SECONDS}
+                      onGameEvent={gameEvents.handleGameEvent}
+                      onGameComplete={(stats) => {
+                        console.log('Game completed with stats:', stats);
+                      }}
+                    />
+                  )}
+
+                  {recordingFlow.selectedGame === 'flappy_bird' && (
+                    <FlappyBirdGame
+                      onGameEvent={gameEvents.handleGameEvent}
+                      onGameComplete={(stats) => {
+                        console.log('Game completed with stats:', stats);
+                      }}
+                    />
+                  )}
+
+                  {recordingFlow.selectedGame === 'website_browse' && (
+                    <Card className="border-4 border-black bg-blue-200">
+                      <CardHeader>
+                        <CardTitle className="text-black font-black uppercase flex items-center gap-2">
+                          <Globe className="h-6 w-6" />
+                          BROWSE WEBSITES
+                        </CardTitle>
                       </CardHeader>
-                      <CardContent className={!showScreenPreview ? 'hidden' : ''}>
-                        <div className="max-w-4xl mx-auto border-8 border-black shadow-[12px_12px_0px_0px_#000]">
-                          <VideoPreview videoBlob={recordingFlow.recordedScreenBlob} />
+                      <CardContent>
+                        <p className="text-black font-bold mb-4">
+                          Browse any website while we record your facial expressions!
+                        </p>
+                        <div className="text-black">
+                          Website browsing active: {websiteSession.websiteUrl}
                         </div>
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Video Preview */}
+                  {recordingFlow.recordedVideoBlob && (
+                    <VideoPreview 
+                      videoBlob={recordingFlow.recordedVideoBlob}
+                    />
+                  )}
                 </div>
+              )}
+
+              {/* Results Display */}
+              {!isActiveSession && (
+                <DashboardGrid 
+                  settings={settings}
+                  initialResults={recordingFlow.analysisResults}
+                  gameEvents={gameEvents.gameEvents}
+                  gameKeyMoments={gameEvents.gameKeyMoments}
+                />
               )}
             </div>
           </main>

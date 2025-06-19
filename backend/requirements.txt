@@ -1,22 +1,37 @@
-# Core dependencies
+# Core FastAPI dependencies
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
+
+# Async processing
+asyncio
+aiofiles
 
 # Data processing
 numpy==1.23.5
 pandas
 scipy==1.10.1
 
-# Computer vision
+# Computer vision  
 opencv-python
 Pillow
 
-# Explicitly install the GPU version of PyTorch first
-# This version is compatible with the CUDA version in the Docker image we will use
+# GPU-enabled PyTorch (CUDA 11.7 compatible)
 --extra-index-url https://download.pytorch.org/whl/cu117
 torch==1.13.1+cu117
 torchvision==0.14.1+cu117
 
 # Facial expression analysis
 py-feat
+
+# System monitoring
+psutil
+
+# Video processing (ffmpeg alternative)
+imageio[ffmpeg]
+
+# Validation
+pydantic
+
+# Logging
+python-json-logger
