@@ -1,8 +1,9 @@
-# app.py - Optimized FastAPI with Async Job System
+# app.py - Fixed FastAPI with Async Job System
 
 import asyncio
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Dict, Optional
 
@@ -19,6 +20,33 @@ from facial_expression_recognizer import get_detector as get_feat_detector
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize job manager
+job_manager = JobManager()
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle startup and shutdown events."""
+    # Startup
+    logger.info("Starting FaceIt Backend API v4.0.0")
+    try:
+        # Pre-initialize detector
+        get_feat_detector()
+        logger.info("✅ py-feat detector initialized successfully")
+        
+        # Start job manager
+        await job_manager.start()
+        logger.info("✅ Job manager started successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Startup failed: {e}")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down FaceIt Backend API")
+    await job_manager.stop()
+
 # Initialize FastAPI
 app = FastAPI(
     title="FaceIt Backend API",
@@ -34,9 +62,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Initialize job manager
-job_manager = JobManager()
 
 # Response models
 class JobSubmissionResponse(BaseModel):
@@ -117,7 +142,7 @@ async def health_check():
         }
     }
 
-# NEW: Async job submission endpoint
+# Async job submission endpoint
 @app.post("/analyze/submit", response_model=JobSubmissionResponse, tags=["Video Analysis"])
 async def submit_video_analysis(
     background_tasks: BackgroundTasks,
@@ -125,10 +150,7 @@ async def submit_video_analysis(
     settings: Optional[str] = Form(None),
     session_id: Optional[str] = Form(None)
 ):
-    """
-    Submit video for async analysis. Returns job_id for tracking progress.
-    Supports 20+ minute videos with progress tracking.
-    """
+    """Submit video for async analysis. Returns job_id for tracking progress."""
     # Generate job ID and session ID
     job_id = str(uuid.uuid4())
     if not session_id:
@@ -172,13 +194,10 @@ async def submit_video_analysis(
             detail={"status": "error", "message": f"Failed to submit job: {str(e)}"}
         )
 
-# NEW: Job status tracking
+# Job status tracking
 @app.get("/analyze/status/{job_id}", response_model=JobStatusResponse, tags=["Video Analysis"])
 async def get_job_status(job_id: str):
-    """
-    Get current status and progress of video analysis job.
-    Returns progress percentage and estimated time remaining.
-    """
+    """Get current status and progress of video analysis job."""
     job = job_manager.get_job(job_id)
     
     if not job:
@@ -199,12 +218,10 @@ async def get_job_status(job_id: str):
         completed_at=job.completed_at.isoformat() if job.completed_at else None
     )
 
-# NEW: Get results when complete
+# Get results when complete
 @app.get("/analyze/result/{job_id}", tags=["Video Analysis"])
 async def get_job_result(job_id: str):
-    """
-    Get final results of completed video analysis.
-    """
+    """Get final results of completed video analysis."""
     job = job_manager.get_job(job_id)
     
     if not job:
@@ -232,9 +249,7 @@ async def analyze_face_legacy(
     file: UploadFile = File(...),
     settings: Optional[str] = Form(None)
 ):
-    """
-    Legacy endpoint - submits job and waits for completion (not recommended for long videos).
-    """
+    """Legacy endpoint - submits job and waits for completion."""
     # Submit job
     response = await submit_video_analysis(background_tasks, file, settings)
     job_id = response.job_id
@@ -339,32 +354,6 @@ async def ping_server():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
-
-# Lifespan event handler
-from contextlib import asynccontextmanager
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Handle startup and shutdown events."""
-    # Startup
-    logger.info("Starting FaceIt Backend API v4.0.0")
-    try:
-        # Pre-initialize detector
-        get_feat_detector()
-        logger.info("✅ py-feat detector initialized successfully")
-        
-        # Start job manager
-        await job_manager.start()
-        logger.info("✅ Job manager started successfully")
-        
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-    
-    yield
-    
-    # Shutdown
-    logger.info("Shutting down FaceIt Backend API")
-    await job_manager.stop()
 
 # Run server
 if __name__ == "__main__":
