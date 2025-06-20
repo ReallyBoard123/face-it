@@ -28,19 +28,66 @@ interface SessionResponse {
   timestamp: string;
 }
 
+interface AnalysisResults {
+  summary?: {
+    emotions?: {
+      statistics?: Record<string, {
+        mean: number;
+        max: number;
+        std?: number;
+        dominant_frames?: number;
+      }>;
+      timeline?: {
+        timestamps?: number[];
+        [emotion: string]: number[] | undefined;
+      };
+    };
+    action_units?: {
+      statistics?: Record<string, {
+        mean: number;
+        max: number;
+        activation_rate: number;
+      }>;
+    };
+    emotional_key_moments?: Array<{
+      timestamp: number;
+      reason: string;
+      type: string;
+      frameNumber?: number;
+      faceFrame?: string;
+      gameFrame?: string;
+    }>;
+  };
+  visualization_type?: string;
+  metadata?: {
+    filename: string;
+    processed_at: string;
+    detector_version: string;
+    session_id: string;
+  };
+}
+
+interface AnalysisSettings {
+  frameSkip: number;
+  analysisType: string;
+  visualizationStyle: string;
+  detectionThreshold: number;
+  batchSize: number;
+}
+
 interface AnalysisStartResponse {
   status: string;
   message: string;
   job_id: string | null;
   session_id: string;
-  results?: any;
+  results?: AnalysisResults;
 }
 
 interface AnalysisStatusResponse {
   status: string;
   message?: string;
   progress?: number;
-  results?: any;
+  results?: AnalysisResults;
 }
 
 class BackendService {
@@ -141,7 +188,7 @@ class BackendService {
     }
   }
 
-  async startAnalysis(sessionId: string, videoBlob: Blob, filename: string, settings: any, screenBlob?: Blob): Promise<AnalysisStartResponse> {
+  async startAnalysis(sessionId: string, videoBlob: Blob, filename: string, settings: AnalysisSettings, screenBlob?: Blob): Promise<AnalysisStartResponse> {
     try {
       const formData = new FormData();
       formData.append('file', videoBlob, filename);
@@ -216,4 +263,13 @@ class BackendService {
 
 // Export singleton instance
 export const backendService = new BackendService();
-export type { ServerStatus, CacheStatus, ClearCacheResponse, SessionResponse, AnalysisStartResponse, AnalysisStatusResponse };
+export type { 
+  ServerStatus, 
+  CacheStatus, 
+  ClearCacheResponse, 
+  SessionResponse, 
+  AnalysisStartResponse, 
+  AnalysisStatusResponse,
+  AnalysisResults,
+  AnalysisSettings
+};
