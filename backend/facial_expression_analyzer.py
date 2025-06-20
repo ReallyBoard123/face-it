@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from celery_app import celery_app
-from utils import RedisManager, safe_convert_to_python_types
+from utils import RedisManager, safe_convert_to_python_types, get_optimal_frame_skip
 
 logger = logging.getLogger(__name__)
 
