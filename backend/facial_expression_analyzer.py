@@ -70,7 +70,7 @@ def get_detector():
     return _detector
 
 def convert_video_if_needed(input_path: str, content_type: str, filename: str) -> str:
-    """Convert WebM to MP4 if needed"""
+    """Convert WebM to MP4 if needed with proper metadata handling"""
     if content_type == 'video/webm' or (filename and filename.endswith('.webm')):
         try:
             output_path = input_path.replace('.webm', '.mp4')
@@ -80,27 +80,44 @@ def convert_video_if_needed(input_path: str, content_type: str, filename: str) -
                 logger.warning("Failed to open video for conversion, using original")
                 return input_path
             
-            fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
+            # Handle missing FPS metadata
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            if fps is None or fps <= 0 or not fps:
+                fps = 30.0  # Default to 30 FPS
+                logger.warning("Video FPS metadata missing, defaulting to 30 FPS")
+            
+            fps = int(fps)
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            
+            # Ensure valid dimensions
+            if width <= 0 or height <= 0:
+                width, height = 640, 480  # Default resolution
+                logger.warning("Video dimensions invalid, defaulting to 640x480")
             
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
             out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
             
             if not out.isOpened():
                 cap.release()
+                logger.warning("Failed to create output video writer")
                 return input_path
             
+            frame_count = 0
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
+                # Resize frame if necessary
+                if frame.shape[1] != width or frame.shape[0] != height:
+                    frame = cv2.resize(frame, (width, height))
                 out.write(frame)
+                frame_count += 1
             
             cap.release()
             out.release()
             
-            logger.info("Video conversion completed")
+            logger.info(f"Video conversion completed: {frame_count} frames at {fps} FPS")
             return output_path
             
         except Exception as e:
@@ -295,7 +312,13 @@ def run_detector_on_video(video_path: str, config: AnalysisConfig,
     
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    
+    # Handle missing FPS metadata
+    if fps is None or fps <= 0 or not fps:
+        fps = 30.0  # Default to 30 FPS
+        logger.warning("Video FPS metadata missing in analysis, defaulting to 30 FPS")
+    
     video_duration = total_frames / fps
     cap.release()
     
@@ -386,9 +409,12 @@ def analyze_video_task(self, session_id: str, video_data: bytes, filename: str,
         
         update_progress(20, "Getting video metadata...")
         
-        # Get video FPS
+        # Get video FPS with proper fallback
         cap = cv2.VideoCapture(video_path)
-        video_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        video_fps = cap.get(cv2.CAP_PROP_FPS)
+        if video_fps is None or video_fps <= 0 or not video_fps:
+            video_fps = 30.0  # Default to 30 FPS
+            logger.warning("Video FPS metadata missing in task, defaulting to 30 FPS")
         cap.release()
         
         update_progress(30, "Starting facial expression analysis...")
