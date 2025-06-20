@@ -98,12 +98,24 @@ const ScreenRecorder = forwardRef<ScreenRecorderHandles, ScreenRecorderProps>(
       try {
         chunksRef.current = [];
 
-        const options: MediaRecorderOptions = {};
-        const mimeType = 'video/webm;codecs=vp8,opus';
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          options.mimeType = mimeType;
-        } else {
-          console.warn(`${mimeType} not supported, using default`);
+        const options: MediaRecorderOptions = {
+          videoBitsPerSecond: 500000, // 500kbps - good for screen content
+          audioBitsPerSecond: 32000,  // 32kbps - lower audio bitrate
+        };
+        
+        // Try VP9 first (better compression), fallback to VP8, then default
+        const mimeTypes = [
+          'video/webm;codecs=vp9,opus',  // Best compression for screen recording
+          'video/webm;codecs=vp8,opus',  // Good compression
+          'video/webm'                   // Default fallback
+        ];
+        
+        for (const mimeType of mimeTypes) {
+          if (MediaRecorder.isTypeSupported(mimeType)) {
+            options.mimeType = mimeType;
+            console.log(`Screen recording using codec: ${mimeType}`);
+            break;
+          }
         }
 
         const mediaRecorder = new MediaRecorder(streamToRecord, options);

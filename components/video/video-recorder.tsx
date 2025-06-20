@@ -52,8 +52,17 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
       setError(null);
       try {
         const webcamStream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-          audio: true,
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 }, 
+            facingMode: 'user',
+            frameRate: { ideal: 15, max: 20 } // Reduce frame rate for smaller files
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 22050 // Lower audio quality for smaller files
+          },
         });
         setStream(webcamStream);
         if (videoRef.current) {
@@ -97,12 +106,24 @@ const VideoRecorder = forwardRef<VideoRecorderHandles, VideoRecorderProps>(
             videoRef.current.srcObject = streamToRecord;
         }
 
-        const options: MediaRecorderOptions = {};
-        const mimeType = 'video/webm;codecs=vp8,opus';
-        if (MediaRecorder.isTypeSupported(mimeType)) {
+        const options: MediaRecorderOptions = {
+          videoBitsPerSecond: 250000, // 250kbps - much lower than default (usually 2.5Mbps)
+          audioBitsPerSecond: 32000,  // 32kbps - lower audio bitrate
+        };
+        
+        // Try VP9 first (better compression), fallback to VP8, then default
+        const mimeTypes = [
+          'video/webm;codecs=vp9,opus',  // Best compression
+          'video/webm;codecs=vp8,opus',  // Good compression
+          'video/webm'                   // Default fallback
+        ];
+        
+        for (const mimeType of mimeTypes) {
+          if (MediaRecorder.isTypeSupported(mimeType)) {
             options.mimeType = mimeType;
-        } else {
-            console.warn(`${mimeType} is not supported, using default.`);
+            console.log(`Using codec: ${mimeType}`);
+            break;
+          }
         }
         const mediaRecorder = new MediaRecorder(streamToRecord, options);
         mediaRecorderRef.current = mediaRecorder;
