@@ -32,3 +32,6 @@ pydantic
 
 # WebSocket support
 websockets
+
+# Cloud deployment support
+supervisor

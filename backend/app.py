@@ -336,6 +336,106 @@ async def get_metrics():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/flower/workers")
+async def get_flower_workers():
+    """Get Celery worker status (similar to Flower)"""
+    try:
+        # Get worker stats
+        inspect = celery_app.control.inspect()
+        stats = inspect.stats()
+        active = inspect.active()
+        reserved = inspect.reserved()
+        
+        return {
+            "workers": stats or {},
+            "active_tasks": active or {},
+            "reserved_tasks": reserved or {},
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get worker stats: {e}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/flower/tasks")
+async def get_flower_tasks():
+    """Get recent task information"""
+    try:
+        # Get recent tasks (limited info since we don't have full Flower state)
+        inspect = celery_app.control.inspect()
+        active_tasks = inspect.active()
+        reserved_tasks = inspect.reserved()
+        
+        # Combine active and reserved tasks
+        all_tasks = []
+        
+        if active_tasks:
+            for worker, tasks in active_tasks.items():
+                for task in tasks:
+                    task["worker"] = worker
+                    task["state"] = "ACTIVE"
+                    all_tasks.append(task)
+        
+        if reserved_tasks:
+            for worker, tasks in reserved_tasks.items():
+                for task in tasks:
+                    task["worker"] = worker  
+                    task["state"] = "RESERVED"
+                    all_tasks.append(task)
+        
+        return {
+            "tasks": all_tasks,
+            "count": len(all_tasks),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get task info: {e}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/flower/monitor")
+async def get_flower_monitor():
+    """Get comprehensive monitoring info (Flower-like dashboard data)"""
+    try:
+        inspect = celery_app.control.inspect()
+        
+        # Get various stats
+        stats = inspect.stats() or {}
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+        registered = inspect.registered() or {}
+        
+        # Calculate totals
+        total_active = sum(len(tasks) for tasks in active.values())
+        total_reserved = sum(len(tasks) for tasks in reserved.values())
+        
+        return {
+            "broker_url": redis_manager.redis_client.connection_pool.connection_kwargs.get('host', 'localhost'),
+            "workers": {
+                "online": len(stats),
+                "stats": stats
+            },
+            "tasks": {
+                "active": total_active,
+                "reserved": total_reserved,
+                "registered": registered
+            },
+            "queues": {
+                "default": redis_manager.get_queue_length()
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get monitoring info: {e}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 if __name__ == "__main__":
     logger.info("Starting FaceIt Backend API v4.0")
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
