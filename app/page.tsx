@@ -48,36 +48,71 @@ export default function Home() {
     recordingFlow.setErrorMessage
   );
 
-  // Memoize analyzeVideo to prevent useEffect dependency issues
+  // UPDATED: Session-based analyzeVideo function
   const analyzeVideo = useCallback(async (videoBlob: Blob) => {
     recordingFlow.setIsAnalyzingBackend(true);
     recordingFlow.setErrorMessage(null);
     
-    const formData = new FormData();
-    formData.append('file', videoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
-    
-    if (recordingFlow.recordedScreenBlob) {
-      formData.append('screen_file', recordingFlow.recordedScreenBlob, 'screen-recording.webm');
-    }
-    
-    formData.append('settings', JSON.stringify(settings));
-    
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const response = await fetch(`${API_BASE_URL}/analyze/face`, { method: 'POST', body: formData });
-      if (!response.ok) {
-        const errData = await response.json();
+      
+      // Step 1: Create session
+      const sessionResponse = await fetch(`${API_BASE_URL}/session/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!sessionResponse.ok) throw new Error('Failed to create session');
+      const { session_id } = await sessionResponse.json();
+      
+      // Step 2: Start analysis
+      const formData = new FormData();
+      formData.append('file', videoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
+      
+      if (recordingFlow.recordedScreenBlob) {
+        formData.append('screen_file', recordingFlow.recordedScreenBlob, 'screen-recording.webm');
+      }
+      
+      formData.append('session_id', session_id);
+      formData.append('settings', JSON.stringify(settings));
+      
+      const startResponse = await fetch(`${API_BASE_URL}/analyze/start`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!startResponse.ok) {
+        const errData = await startResponse.json();
         throw new Error(errData.detail?.message || 'Analysis server error.');
       }
-      const data = await response.json();
-      if (data.status === "nodata") {
-        recordingFlow.setErrorMessage(data.message || "No analysis data returned from server.");
-        recordingFlow.setAnalysisResults(null);
-        recordingFlow.setFlowState("ready_to_start");
-      } else {
-        recordingFlow.setAnalysisResults(data);
+      
+      const startData = await startResponse.json();
+      
+      if (startData.status === 'completed') {
+        // Already cached
+        recordingFlow.setAnalysisResults(startData.results);
         recordingFlow.setFlowState("results_ready");
+        return;
       }
+      
+      // Step 3: Poll for results
+      const pollResults = async () => {
+        const statusResponse = await fetch(`${API_BASE_URL}/analyze/status/${session_id}/${startData.job_id}`);
+        const statusData = await statusResponse.json();
+        
+        if (statusData.status === 'completed') {
+          recordingFlow.setAnalysisResults(statusData.results);
+          recordingFlow.setFlowState("results_ready");
+        } else if (statusData.status === 'error') {
+          throw new Error(statusData.message);
+        } else {
+          // Still processing, poll again
+          setTimeout(pollResults, 2000);
+        }
+      };
+      
+      pollResults();
+      
     } catch (error) {
       console.error('Analysis fetch error:', error);
       recordingFlow.setErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);

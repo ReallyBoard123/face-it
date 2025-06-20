@@ -1,31 +1,26 @@
-# app.py - Add these new endpoints to your existing app.py
-
 import logging
+import os
 from datetime import datetime
+from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Import routers and logic functions from the new modules
-from facial_expression_recognizer import (
-    analyze_facial_expressions,
-    get_detector as get_feat_detector,
-    analysis_cache as face_expression_cache,
-    cache_timestamps as face_cache_timestamps,
-    clean_expired_cache as clean_face_cache,
-    clear_all_cache,  # New function we'll add
-)
+from utils import SessionManager, RedisManager, get_video_hash
+from facial_expression_analyzer import analyze_video_task
+from celery_app import celery_app
 
-# --- Basic Setup ---
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize FastAPI app
 app = FastAPI(
-    title="Unified Analysis API",
-    description="Combines facial expression analysis (py-feat) and eye tracking (EyeTrax).",
-    version="3.0.0",
+    title="FaceIt Backend API",
+    description="Scalable facial expression analysis with session management and queuing",
+    version="4.0.0",
 )
 
 app.add_middleware(
@@ -36,150 +31,254 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Existing endpoints (root, health, analyze/face) ---
+# Initialize managers
+session_manager = SessionManager()
+redis_manager = RedisManager()
 
+# WebSocket manager for real-time updates
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: dict = {}
+
+    async def connect(self, websocket: WebSocket, session_id: str):
+        await websocket.accept()
+        self.active_connections[session_id] = websocket
+
+    def disconnect(self, session_id: str):
+        if session_id in self.active_connections:
+            del self.active_connections[session_id]
+
+    async def send_update(self, session_id: str, message: dict):
+        if session_id in self.active_connections:
+            try:
+                await self.active_connections[session_id].send_json(message)
+            except:
+                self.disconnect(session_id)
+
+connection_manager = ConnectionManager()
+
+# Routes
 @app.get("/")
 async def root():
-    """Provides a summary of the available API features."""
     return {
-        "name": "Unified Analysis API",
-        "version": "3.0.0",
+        "name": "FaceIt Backend API",
+        "version": "4.0.0",
         "status": "running",
-        "services": {
-            "facial_expression_analysis": {
-                "library": "py-feat",
-                "status": "✅ Detector available" if get_feat_detector() else "❌ Detector not initialized",
-                "cache_entries": len(face_expression_cache),
-                "docs": "/docs#/Facial%20Expression/analyze_face_endpoint_analyze_face_post",
-            }
+        "features": {
+            "session_management": True,
+            "queue_system": True,
+            "websocket_updates": True,
+            "concurrent_users": True
         }
     }
 
 @app.get("/health")
 async def health_check():
-    """Provides a detailed health check of all services."""
-    try:
-        feat_detector = get_feat_detector()
-        feat_ready = feat_detector is not None
-    except Exception:
-        feat_ready = False
-
-    clean_face_cache() # Periodically clean the cache on health checks
-
+    redis_status = redis_manager.ping()
+    celery_status = celery_app.control.ping()
+    
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "server_running": True,
         "services": {
-            "facial_expression": {
-                "detector_ready": feat_ready,
-                "cache_size": len(face_expression_cache),
-            }
+            "redis": "connected" if redis_status else "disconnected",
+            "celery": "connected" if celery_status else "disconnected",
+            "active_sessions": len(session_manager.sessions),
+            "queue_length": redis_manager.get_queue_length()
         }
     }
 
-# --- NEW CACHE MANAGEMENT ENDPOINTS ---
-
-@app.post("/cache/clear", tags=["Cache Management"])
-async def clear_cache():
-    """
-    Manually clear all analysis cache.
-    Useful when starting a new session to ensure fresh analysis.
-    """
-    try:
-        cache_size_before = len(face_expression_cache)
-        clear_all_cache()
-        
-        logger.info(f"Cache manually cleared. Removed {cache_size_before} entries.")
-        
-        return {
-            "status": "success",
-            "message": f"Cache cleared successfully. Removed {cache_size_before} entries.",
-            "entries_removed": cache_size_before,
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        logger.error(f"Error clearing cache: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"Failed to clear cache: {str(e)}"}
-        )
-
-@app.get("/cache/status", tags=["Cache Management"])
-async def cache_status():
-    """
-    Get current cache status and statistics.
-    """
+@app.post("/session/create")
+async def create_session():
+    """Create new user session"""
+    session_id = session_manager.create_session()
     return {
-        "cache_size": len(face_expression_cache),
-        "cache_entries": list(face_expression_cache.keys()),
-        "timestamps": {k: datetime.fromtimestamp(v).isoformat() for k, v in face_cache_timestamps.items()},
+        "session_id": session_id,
+        "status": "created",
         "timestamp": datetime.now().isoformat()
     }
 
-@app.post("/server/ping", tags=["Server Management"])
-async def ping_server():
-    """
-    Simple ping endpoint to verify server is running and responsive.
-    Also ensures the detector is ready.
-    """
-    try:
-        # Ensure detector is initialized
-        detector = get_feat_detector()
-        detector_status = detector is not None
+@app.get("/session/{session_id}/status")
+async def get_session_status(session_id: str):
+    """Get session information"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "session_id": session_id,
+        "status": session["status"],
+        "created_at": session["created_at"].isoformat(),
+        "current_job": session.get("current_job"),
+        "cached_results": len(session.get("cache", {}))
+    }
+
+@app.post("/analyze/start")
+async def start_analysis(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+    settings: Optional[str] = Form(None)
+):
+    """Start video analysis asynchronously"""
+    # Validate session
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if session["status"] == "processing":
+        raise HTTPException(status_code=409, detail="Session already processing a video")
+    
+    # Read and hash video
+    file_content = await file.read()
+    video_hash = get_video_hash(file_content)
+    
+    # Check cache first
+    cached_result = redis_manager.get_cached_result(session_id, video_hash)
+    if cached_result:
+        return {
+            "status": "completed",
+            "message": "Results found in cache",
+            "job_id": None,
+            "results": cached_result
+        }
+    
+    # Queue analysis task
+    job = analyze_video_task.delay(
+        session_id=session_id,
+        video_data=file_content,
+        filename=file.filename,
+        content_type=file.content_type,
+        settings=settings,
+        video_hash=video_hash
+    )
+    
+    # Update session
+    session_manager.update_session(session_id, {
+        "status": "processing",
+        "current_job": job.id
+    })
+    
+    return {
+        "status": "queued",
+        "message": "Video analysis started",
+        "job_id": job.id,
+        "session_id": session_id
+    }
+
+@app.get("/analyze/status/{session_id}/{job_id}")
+async def get_analysis_status(session_id: str, job_id: str):
+    """Get analysis progress and results"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Get job status from Celery
+    job = celery_app.AsyncResult(job_id)
+    
+    if job.state == "PENDING":
+        return {
+            "status": "queued",
+            "message": "Analysis is queued",
+            "progress": 0
+        }
+    elif job.state == "PROGRESS":
+        return {
+            "status": "processing",
+            "message": job.info.get("message", "Processing video..."),
+            "progress": job.info.get("progress", 0)
+        }
+    elif job.state == "SUCCESS":
+        # Update session status
+        session_manager.update_session(session_id, {
+            "status": "ready",
+            "current_job": None
+        })
         
         return {
-            "status": "pong",
-            "server_running": True,
-            "detector_ready": detector_status,
-            "timestamp": datetime.now().isoformat(),
-            "message": "Server is running and ready for analysis"
+            "status": "completed",
+            "message": "Analysis completed successfully",
+            "progress": 100,
+            "results": job.result
         }
-    except Exception as e:
-        logger.error(f"Server ping failed: {e}")
+    else:  # FAILURE
+        session_manager.update_session(session_id, {
+            "status": "error",
+            "current_job": None
+        })
+        
         return {
-            "status": "error", 
-            "server_running": True,
-            "detector_ready": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "status": "error",
+            "message": f"Analysis failed: {str(job.info)}",
+            "progress": 0
         }
 
-# --- Existing analyze/face endpoint ---
-@app.post("/analyze/face", tags=["Facial Expression"])
-async def analyze_face_endpoint(
-    file: UploadFile = File(...),
-    settings: str | None = Form(None)
-):
-    """
-    Analyzes a video for facial expressions, emotions, and action units.
-    This endpoint uses the py-feat library.
-    """
-    try:
-        file_content = await file.read()
-        results = await analyze_facial_expressions(
-            file_content=file_content,
-            filename=file.filename,
-            content_type=file.content_type,
-            settings=settings,
-        )
-        return JSONResponse(content=results)
-    except Exception as e:
-        logger.error(f"Facial analysis error: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": str(e)},
-        )
-
-# --- Server Startup ---
-if __name__ == "__main__":
-    logger.info("Starting Unified Analysis API v3.0")
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """WebSocket endpoint for real-time updates"""
+    await connection_manager.connect(websocket, session_id)
     
-    # Pre-initialize the detector on startup for faster first requests
     try:
-        get_feat_detector()
-        logger.info("✅ py-feat detector pre-initialized successfully.")
-    except Exception as e:
-        logger.error(f"❌ Failed to initialize py-feat detector on startup: {e}")
+        while True:
+            # Send periodic updates
+            session = session_manager.get_session(session_id)
+            if session and session.get("current_job"):
+                job = celery_app.AsyncResult(session["current_job"])
+                
+                update = {
+                    "type": "progress_update",
+                    "job_id": session["current_job"],
+                    "status": job.state,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                if job.state == "PROGRESS":
+                    update.update(job.info)
+                elif job.state == "SUCCESS":
+                    update["results"] = job.result
+                
+                await connection_manager.send_update(session_id, update)
+            
+            await websocket.receive_text()  # Keep connection alive
+            
+    except WebSocketDisconnect:
+        connection_manager.disconnect(session_id)
 
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True, log_level="info")
+@app.post("/session/{session_id}/reset")
+async def reset_session(session_id: str):
+    """Reset session state"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Cancel current job if running
+    if session.get("current_job"):
+        celery_app.control.revoke(session["current_job"], terminate=True)
+    
+    # Reset session
+    session_manager.update_session(session_id, {
+        "status": "ready",
+        "current_job": None
+    })
+    
+    return {
+        "status": "success",
+        "message": "Session reset successfully"
+    }
+
+@app.get("/metrics")
+async def get_metrics():
+    """Get system metrics"""
+    import psutil
+    
+    return {
+        "active_sessions": len(session_manager.sessions),
+        "processing_sessions": len([s for s in session_manager.sessions.values() if s["status"] == "processing"]),
+        "queue_length": redis_manager.get_queue_length(),
+        "memory_usage": psutil.virtual_memory().percent,
+        "cpu_usage": psutil.cpu_percent(),
+        "timestamp": datetime.now().isoformat()
+    }
+
+if __name__ == "__main__":
+    logger.info("Starting FaceIt Backend API v4.0")
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

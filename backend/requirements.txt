@@ -1,7 +1,12 @@
-# Core dependencies
+# Core API
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
+
+# Queue and Caching
+celery==5.3.4
+redis==5.0.1
+flower==2.0.1
 
 # Data processing
 numpy==1.23.5
@@ -12,11 +17,18 @@ scipy==1.10.1
 opencv-python
 Pillow
 
-# Explicitly install the GPU version of PyTorch first
-# This version is compatible with the CUDA version in the Docker image we will use
+# GPU-enabled PyTorch (compatible with CUDA 11.7)
 --extra-index-url https://download.pytorch.org/whl/cu117
 torch==1.13.1+cu117
 torchvision==0.14.1+cu117
 
 # Facial expression analysis
 py-feat
+
+# Utilities
+python-dotenv
+psutil
+pydantic
+
+# WebSocket support
+websockets
