@@ -40,7 +40,7 @@ stderr_logfile_maxbytes=0\n\
 priority=100\n\
 \n\
 [program:celery]\n\
-command=celery -A celery_app worker --loglevel=info --concurrency=4\n\
+command=celery -A celery_app worker --loglevel=info --concurrency=1 --pool=solo\n\
 directory=/app\n\
 autostart=true\n\
 autorestart=true\n\
@@ -52,7 +52,7 @@ environment=REDIS_URL="redis://localhost:6379"\n\
 priority=200\n\
 \n\
 [program:webapp]\n\
-command=uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1\n\
+command=uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1 --limit-request-field-size 65536 --limit-request-line 8190\n\
 directory=/app\n\
 autostart=true\n\
 autorestart=true\n\

@@ -39,19 +39,31 @@ class AnalysisConfig:
     batch_size: int = 1
 
 def get_detector():
-    """Initialize and return the py-feat detector"""
+    """Initialize and return the py-feat detector with GPU optimization"""
     global _detector
     if _detector is None:
         try:
+            import torch
             from feat import Detector
+            
+            # Check GPU availability
+            device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            logger.info(f"🎯 Using device: {device}")
+            
+            if device == 'cuda':
+                logger.info(f"🚀 GPU detected: {torch.cuda.get_device_name(0)}")
+                logger.info(f"💾 GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
+            
             _detector = Detector(
                 face_model="retinaface",
                 landmark_model="mobilefacenet", 
                 au_model="svm",
                 emotion_model="resmasknet",
-                facepose_model="img2pose"
+                facepose_model="img2pose",
+                device=device,  # Explicitly set device
+                n_jobs=1 if device == 'cuda' else 2  # GPU works better with single job
             )
-            logger.info("✅ py-feat detector initialized successfully")
+            logger.info(f"✅ py-feat detector initialized successfully on {device}")
         except Exception as e:
             logger.error(f"❌ Failed to initialize detector: {e}")
             raise
@@ -270,31 +282,64 @@ def calculate_summary_metrics(results_df: pd.DataFrame, config: AnalysisConfig,
 
 def run_detector_on_video(video_path: str, config: AnalysisConfig, 
                          progress_callback=None) -> pd.DataFrame:
-    """Run py-feat detector on video with progress tracking"""
+    """Run py-feat detector on video with GPU optimization"""
+    import torch
+    
     detector = get_detector()
+    
+    # GPU memory management
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        initial_memory = torch.cuda.memory_allocated()
+        logger.info(f"🎯 Initial GPU memory: {initial_memory / 1e6:.1f} MB")
     
     cap = cv2.VideoCapture(video_path)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    video_duration = total_frames / fps
     cap.release()
     
-    # Calculate frames to process
-    frames_to_process = list(range(0, total_frames, config.frame_skip))
+    # Optimize frame skip based on video length and GPU capability
+    optimal_frame_skip = get_optimal_frame_skip(video_duration, config.frame_skip)
+    frames_to_process = list(range(0, total_frames, optimal_frame_skip))
     total_to_process = len(frames_to_process)
     
-    logger.info(f"Processing {total_to_process} frames from {total_frames} total frames")
+    logger.info(f"🎬 Video: {total_frames} frames, {video_duration:.1f}s")
+    logger.info(f"⚡ Processing {total_to_process} frames (skip={optimal_frame_skip})")
     
-    # Process video
-    results = detector.detect_video(
-        video_path,
-        skip_frames=config.frame_skip - 1,
-        batch_size=config.batch_size
-    )
+    # Optimize batch size for GPU
+    gpu_batch_size = 8 if torch.cuda.is_available() else config.batch_size
     
     if progress_callback:
-        progress_callback(100, f"Completed analysis of {len(results)} frames")
+        progress_callback(10, f"Starting GPU analysis of {total_to_process} frames...")
     
-    return results
+    try:
+        # Process video with optimized settings
+        results = detector.detect_video(
+            video_path,
+            skip_frames=optimal_frame_skip - 1,
+            batch_size=gpu_batch_size,
+            face_detection_threshold=config.detection_threshold
+        )
+        
+        if progress_callback:
+            progress_callback(90, f"Completed analysis of {len(results)} frames")
+        
+        # GPU cleanup
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            final_memory = torch.cuda.memory_allocated()
+            logger.info(f"🧹 Final GPU memory: {final_memory / 1e6:.1f} MB")
+        
+        logger.info(f"✅ Successfully processed {len(results)} frames")
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ Video processing failed: {e}")
+        # Emergency GPU cleanup
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        raise
 
 @celery_app.task(bind=True)
 def analyze_video_task(self, session_id: str, video_data: bytes, filename: str, 

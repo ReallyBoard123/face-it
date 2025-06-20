@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, W
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from utils import SessionManager, RedisManager, get_video_hash
+from utils import SessionManager, RedisManager, get_video_hash, validate_video_file
 from facial_expression_analyzer import analyze_video_task
 from celery_app import celery_app
 
@@ -25,10 +25,16 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "*",  # Allow all origins for development
+        "http://localhost:3000",
+        "https://face-it-git-demo-reallyboard123s-projects.vercel.app",
+        "https://*.vercel.app",  # Allow all Vercel deployments
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Initialize managers
@@ -130,6 +136,13 @@ async def start_analysis(
     
     # Read and hash video
     file_content = await file.read()
+    
+    # Validate file size and type
+    file_size = len(file_content)
+    is_valid, validation_message = validate_video_file(file.filename or "video.webm", file.content_type or "video/webm", file_size)
+    if not is_valid:
+        raise HTTPException(status_code=413, detail=validation_message)
+    
     video_hash = get_video_hash(file_content)
     
     # Check cache first
@@ -318,7 +331,7 @@ async def get_cache_status():
 
 @app.get("/metrics")
 async def get_metrics():
-    """Get system metrics"""
+    """Get system metrics including GPU stats"""
     try:
         import psutil
         memory_usage = psutil.virtual_memory().percent
@@ -327,12 +340,30 @@ async def get_metrics():
         memory_usage = 0
         cpu_usage = 0
     
+    # GPU metrics
+    gpu_stats = {}
+    try:
+        import torch
+        if torch.cuda.is_available():
+            gpu_stats = {
+                "gpu_available": True,
+                "gpu_name": torch.cuda.get_device_name(0),
+                "gpu_memory_allocated": torch.cuda.memory_allocated() / 1e9,  # GB
+                "gpu_memory_total": torch.cuda.get_device_properties(0).total_memory / 1e9,  # GB
+                "gpu_memory_percent": (torch.cuda.memory_allocated() / torch.cuda.get_device_properties(0).total_memory) * 100
+            }
+        else:
+            gpu_stats = {"gpu_available": False}
+    except ImportError:
+        gpu_stats = {"gpu_available": False, "error": "PyTorch not available"}
+    
     return {
         "active_sessions": len(session_manager.sessions),
         "processing_sessions": len([s for s in session_manager.sessions.values() if s["status"] == "processing"]),
         "queue_length": redis_manager.get_queue_length(),
         "memory_usage": memory_usage,
         "cpu_usage": cpu_usage,
+        "gpu": gpu_stats,
         "timestamp": datetime.now().isoformat()
     }
 

@@ -202,7 +202,7 @@ export default function Home() {
     };
 
     checkServerOnStartup();
-  }, [backendService]);
+  }, []); // Empty dependency array - only run once on mount
 
   const getStatusColors = (state: string) => {
     switch (state) {

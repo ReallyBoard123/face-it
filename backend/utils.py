@@ -232,8 +232,8 @@ def validate_video_file(filename: str, content_type: str, file_size: int) -> tup
     if content_type not in allowed_types:
         return False, f"Invalid content type: {content_type}"
     
-    # Check file size (max 100MB)
-    max_size = 100 * 1024 * 1024  # 100MB
+    # Check file size (max 200MB for cloud deployment)
+    max_size = 200 * 1024 * 1024  # 200MB
     if file_size > max_size:
         return False, f"File too large. Maximum size is {max_size // (1024*1024)}MB"
     
