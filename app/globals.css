@@ -230,4 +230,85 @@
     font-weight: bold;
     fill: #000;
   }
+  
+  /* Neo-brutalist Toast Styling */
+  [data-sonner-toaster] {
+    @apply font-mono;
+  }
+  
+  [data-sonner-toast] {
+    @apply border-4 border-black shadow-[8px_8px_0px_0px_#000] rounded-none;
+    font-family: 'JetBrains Mono', monospace !important;
+    background: transparent !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 8px !important;
+    min-width: 320px !important;
+    max-width: 500px !important;
+  }
+  
+  [data-sonner-toast][data-type="success"] {
+    @apply bg-green-400;
+  }
+  
+  [data-sonner-toast][data-type="error"] {
+    @apply bg-pink-400;
+  }
+  
+  [data-sonner-toast][data-type="warning"] {
+    @apply bg-orange-400;
+  }
+  
+  [data-sonner-toast][data-type="info"] {
+    @apply bg-blue-400;
+  }
+  
+  [data-sonner-toast][data-type="loading"] {
+    @apply bg-purple-400;
+  }
+  
+  [data-sonner-toast] .sonner-toast-content {
+    @apply p-4 text-black;
+  }
+  
+  [data-sonner-toast] [data-title] {
+    @apply font-black uppercase text-sm tracking-wide text-black;
+    font-family: 'JetBrains Mono', monospace !important;
+    margin: 0 !important;
+  }
+  
+  [data-sonner-toast] [data-description] {
+    @apply font-bold text-xs text-black opacity-80 mt-1;
+    font-family: 'JetBrains Mono', monospace !important;
+    margin: 4px 0 0 0 !important;
+  }
+  
+  [data-sonner-toast] [data-icon] {
+    @apply text-black;
+    margin-right: 12px !important;
+  }
+  
+  [data-sonner-toast] [data-close-button] {
+    @apply border-2 border-black bg-white text-black font-black text-xs;
+    border-radius: 0 !important;
+    right: 8px !important;
+    top: 8px !important;
+  }
+  
+  [data-sonner-toast] [data-close-button]:hover {
+    @apply bg-black text-white;
+  }
+  
+  /* Progress bar for loading toasts */
+  .neo-toast-progress {
+    @apply bg-black h-2 border-2 border-black mt-2;
+  }
+  
+  .neo-toast-progress-bar {
+    @apply h-full bg-white transition-all duration-300 ease-out;
+  }
+  
+  .neo-toast-progress-text {
+    @apply text-xs font-black text-black mt-1;
+  }
 }

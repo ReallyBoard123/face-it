@@ -21,8 +21,9 @@ import FlappyBirdGame from '@/components/games/flappy-bird';
 import { useRecordingFlow } from '@/hooks/use-recording-flow';
 import { useGameEvents } from '@/hooks/use-game-events';
 import { useWebsiteSession } from '@/hooks/use-website-session';
-import { useBackendService } from '@/hooks/use-backend-service'; // NEW IMPORT
-import { toast } from 'sonner'; // NEW IMPORT
+import { useBackendService } from '@/hooks/use-backend-service';
+import { useAnalysisProgress } from '@/hooks/use-analysis-progress';
+import { toast } from '@/components/ui/toast';
 
 type AnalysisTypeString = "emotions" | "aus" | "combined" | "landmarks";
 type VisualizationStyleString = "timeline" | "heatmap" | "distribution";
@@ -38,7 +39,8 @@ export default function Home() {
 
   const recordingFlow = useRecordingFlow();
   const [showScreenPreview, setShowScreenPreview] = useState(false);
-  const backendService = useBackendService(); // NEW HOOK
+  const backendService = useBackendService();
+  const analysisProgress = useAnalysisProgress();
   const websiteSession = useWebsiteSession();
   const videoRecorderRef = React.useRef<VideoRecorderHandles>(null);
   const gameEvents = useGameEvents(
@@ -48,15 +50,19 @@ export default function Home() {
     recordingFlow.setErrorMessage
   );
 
-  // UPDATED: Session-based analyzeVideo function
+  // Enhanced analyzeVideo function with real-time progress tracking
   const analyzeVideo = useCallback(async (videoBlob: Blob) => {
     recordingFlow.setIsAnalyzingBackend(true);
     recordingFlow.setErrorMessage(null);
+    
+    // Start upload progress tracking
+    analysisProgress.startUpload(videoBlob.size);
     
     try {
       const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       
       // Step 1: Create session
+      analysisProgress.updateUploadProgress(10);
       const sessionResponse = await fetch(`${API_BASE_URL}/session/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -65,40 +71,54 @@ export default function Home() {
       if (!sessionResponse.ok) throw new Error('Failed to create session');
       const { session_id } = await sessionResponse.json();
       
-      // Step 2: Start analysis
+      // Step 2: Prepare and upload video
+      analysisProgress.updateUploadProgress(30);
       const formData = new FormData();
-      formData.append('file', videoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
+      
+      // Create a new blob with video/mp4 MIME type to match backend expectations
+      const mp4VideoBlob = new Blob([videoBlob], { type: 'video/mp4' });
+      formData.append('file', mp4VideoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.mp4' : 'gameplay-recording.mp4');
       
       if (recordingFlow.recordedScreenBlob) {
-        formData.append('screen_file', recordingFlow.recordedScreenBlob, 'screen-recording.webm');
+        // Also convert screen recording to mp4 MIME type
+        const mp4ScreenBlob = new Blob([recordingFlow.recordedScreenBlob], { type: 'video/mp4' });
+        formData.append('screen_file', mp4ScreenBlob, 'screen-recording.mp4');
       }
       
       formData.append('session_id', session_id);
       formData.append('settings', JSON.stringify(settings));
+      
+      analysisProgress.updateUploadProgress(70);
       
       const startResponse = await fetch(`${API_BASE_URL}/analyze/start`, {
         method: 'POST',
         body: formData
       });
       
+      analysisProgress.updateUploadProgress(100);
+      
       if (!startResponse.ok) {
         const errData = await startResponse.json();
-        throw new Error(errData.detail?.message || 'Analysis server error.');
+        throw new Error(errData.detail?.message || 'Upload failed');
       }
       
       const startData = await startResponse.json();
       
       if (startData.status === 'completed') {
-        // Already cached
+        // Already cached - complete immediately
+        analysisProgress.completeAnalysis();
         recordingFlow.setAnalysisResults(startData.results);
         recordingFlow.setFlowState("results_ready");
         recordingFlow.setIsAnalyzingBackend(false);
         return;
       }
       
-      // Step 3: Poll for results with timeout
+      // Step 3: Start analysis tracking
+      analysisProgress.startAnalysis(session_id, startData.job_id);
+      
+      // Step 4: Poll for results with enhanced progress tracking
       let pollCount = 0;
-      const maxPolls = 150; // 5 minutes max (150 * 2 seconds)
+      const maxPolls = 150; // 5 minutes max
       
       const pollResults = async () => {
         try {
@@ -116,14 +136,20 @@ export default function Home() {
           const statusData = await statusResponse.json();
           
           if (statusData.status === 'completed') {
+            analysisProgress.completeAnalysis();
             recordingFlow.setAnalysisResults(statusData.results);
             recordingFlow.setFlowState("results_ready");
             recordingFlow.setIsAnalyzingBackend(false);
           } else if (statusData.status === 'error') {
-            throw new Error(statusData.message || 'Analysis failed');
+            throw new Error(statusData.message || 'GPU analysis failed');
           } else {
-            // Still processing - keep polling
-            console.log(`Poll ${pollCount}: ${statusData.status} - ${statusData.message || 'Processing...'}`);
+            // Update progress with real-time data
+            const progress = statusData.progress || Math.min(95, (pollCount / maxPolls) * 100);
+            const message = statusData.message || 'Processing on GPU...';
+            
+            analysisProgress.updateAnalysisProgress(progress, message);
+            
+            // Continue polling
             setTimeout(pollResults, 2000);
           }
         } catch (pollError) {
@@ -135,11 +161,13 @@ export default function Home() {
       pollResults();
       
     } catch (error) {
-      console.error('Analysis fetch error:', error);
-      recordingFlow.setErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Analysis error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      analysisProgress.setError(errorMessage);
+      recordingFlow.setErrorMessage(`Analysis failed: ${errorMessage}`);
       recordingFlow.setIsAnalyzingBackend(false);
     }
-  }, [recordingFlow, settings]);
+  }, [recordingFlow, settings, analysisProgress]);
 
   // Handle video recording completion
   const handleVideoRecorded = useCallback((blob: Blob) => {
@@ -173,23 +201,29 @@ export default function Home() {
     }
   }, [recordingFlow, recordingFlow.recordedVideoBlob, recordingFlow.recordedScreenBlob, recordingFlow.flowState, recordingFlow.setFlowState, analyzeVideo]);
 
-  // UPDATED RESET FUNCTION WITH BACKEND SERVICE INTEGRATION
+  // Enhanced reset function with progress tracking and toast notifications
   const handleReset = useCallback(async () => {
-    // Start with frontend cleanup
+    // Reset progress tracking
+    analysisProgress.reset();
+    
+    // Frontend cleanup
     recordingFlow.resetFlow();
     gameEvents.resetGameEvents();
     websiteSession.cleanup();
     
-    // Prepare backend for new session with custom neo-brutalist style toast
+    // Prepare backend for new session
     try {
-      await backendService.prepareNewSession();
-    } catch {
-      // Error is already shown via toast, but we can log it
-      console.warn('Backend preparation failed, but frontend reset completed');
+      const result = await backendService.prepareNewSession();
+      if (result.serverReady) {
+        analysisProgress.showServerReady();
+      }
+    } catch (error) {
+      console.warn('Backend preparation failed:', error);
+      toast.warning('BACKEND UNAVAILABLE', 'Some features may be limited');
     }
-  }, [recordingFlow, gameEvents, websiteSession, backendService]);
+  }, [recordingFlow, gameEvents, websiteSession, backendService, analysisProgress]);
 
-  // NEW: Check server health on app startup
+  // Check server health on app startup
   useEffect(() => {
     const checkServerOnStartup = async () => {
       try {
@@ -197,7 +231,7 @@ export default function Home() {
         console.log('Initial server health check completed');
       } catch (error) {
         console.warn('Initial server health check failed:', error);
-        toast.warning('⚠️ Backend server may not be running. Some features may be unavailable.');
+        toast.warning('BACKEND UNAVAILABLE', 'Server may not be running. Some features may be limited.');
       }
     };
 
@@ -372,29 +406,59 @@ export default function Home() {
                 </div>
               )}
               
-              {/* Analysis Loading */}
+              {/* Enhanced Analysis Progress */}
               {recordingFlow.flowState === "analyzing" && recordingFlow.isAnalyzingBackend && (
                 <div className="col-span-1 md:col-span-3 mt-8 text-center">
                   <Card variant="orange" className="neo-pulse">
                     <CardHeader>
                       <CardTitle className="text-black">
-                        ANALYZING {recordingFlow.selectedGame === 'website_browse' ? 'WEBSITE CHAOS' : 'GAMEPLAY MADNESS'}...
+                        {analysisProgress.progressState.phase === 'uploading' ? 'UPLOADING' : 'ANALYZING'} {recordingFlow.selectedGame === 'website_browse' ? 'WEBSITE CHAOS' : 'GAMEPLAY MADNESS'}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6 py-12">
-                      <Loader2 className="h-20 w-20 animate-spin mx-auto text-black" />
-                      <p className="text-lg font-bold text-black uppercase tracking-wider">
-                        CRUNCHING THE DATA{recordingFlow.recordedScreenBlob ? ' & SCREEN ACTIVITY' : ''}...
-                      </p>
-                      <div className="flex justify-center gap-2">
-                        {[...Array(5)].map((_, i) => (
-                          <div 
-                            key={i} 
-                            className="w-4 h-4 neo-pink border-2 border-black animate-bounce"
-                            style={{ animationDelay: `${i * 0.1}s` }}
-                          />
-                        ))}
+                      <div className="flex items-center justify-center gap-4">
+                        <Loader2 className="h-20 w-20 animate-spin text-black" />
+                        <div className="text-left">
+                          {analysisProgress.progressState.fileSize && (
+                            <div className="text-sm font-black text-black uppercase">
+                              📁 FILE: {analysisProgress.progressState.fileSize}
+                            </div>
+                          )}
+                          {analysisProgress.progressState.eta && (
+                            <div className="text-sm font-black text-black uppercase">
+                              ⏱️ ETA: {analysisProgress.progressState.eta}
+                            </div>
+                          )}
+                          {analysisProgress.progressState.framesProcessed && (
+                            <div className="text-sm font-black text-black uppercase">
+                              🎬 FRAMES: {analysisProgress.progressState.framesProcessed}/{analysisProgress.progressState.totalFrames}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      
+                      <div className="max-w-md mx-auto">
+                        <div className="text-lg font-bold text-black uppercase tracking-wider mb-2">
+                          {analysisProgress.progressState.message}
+                        </div>
+                        
+                        {/* Progress Bar */}
+                        <div className="bg-black h-4 border-4 border-black">
+                          <div 
+                            className="h-full bg-white transition-all duration-500 ease-out"
+                            style={{ width: `${Math.max(0, Math.min(100, analysisProgress.progressState.progress))}%` }}
+                          />
+                        </div>
+                        <div className="text-sm font-black text-black mt-2">
+                          {Math.round(analysisProgress.progressState.progress)}% COMPLETE
+                        </div>
+                      </div>
+                      
+                      {recordingFlow.recordedScreenBlob && (
+                        <div className="text-xs font-bold text-black opacity-80 uppercase">
+                          + SCREEN RECORDING ANALYSIS
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
