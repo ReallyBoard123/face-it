@@ -14,11 +14,6 @@ celery_app = Celery(
 
 # Celery configuration
 celery_app.conf.update(
-    # Task routing
-    task_routes={
-        'facial_expression_analyzer.analyze_video_task': {'queue': 'video_processing'}
-    },
-    
     # Task serialization
     task_serializer='json',
     accept_content=['json'],
@@ -45,7 +40,7 @@ celery_app.conf.update(
     # Beat schedule (for periodic tasks)
     beat_schedule={
         'cleanup-old-results': {
-            'task': 'facial_expression_analyzer.cleanup_old_results',
+            'task': 'celery_app.cleanup_old_results',
             'schedule': 3600.0,  # Run every hour
         },
     },

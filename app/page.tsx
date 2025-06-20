@@ -92,22 +92,43 @@ export default function Home() {
         // Already cached
         recordingFlow.setAnalysisResults(startData.results);
         recordingFlow.setFlowState("results_ready");
+        recordingFlow.setIsAnalyzingBackend(false);
         return;
       }
       
-      // Step 3: Poll for results
+      // Step 3: Poll for results with timeout
+      let pollCount = 0;
+      const maxPolls = 150; // 5 minutes max (150 * 2 seconds)
+      
       const pollResults = async () => {
-        const statusResponse = await fetch(`${API_BASE_URL}/analyze/status/${session_id}/${startData.job_id}`);
-        const statusData = await statusResponse.json();
-        
-        if (statusData.status === 'completed') {
-          recordingFlow.setAnalysisResults(statusData.results);
-          recordingFlow.setFlowState("results_ready");
-        } else if (statusData.status === 'error') {
-          throw new Error(statusData.message);
-        } else {
-          // Still processing, poll again
-          setTimeout(pollResults, 2000);
+        try {
+          pollCount++;
+          if (pollCount > maxPolls) {
+            throw new Error('Analysis timeout - please try again');
+          }
+          
+          const statusResponse = await fetch(`${API_BASE_URL}/analyze/status/${session_id}/${startData.job_id}`);
+          
+          if (!statusResponse.ok) {
+            throw new Error(`Status check failed: ${statusResponse.status}`);
+          }
+          
+          const statusData = await statusResponse.json();
+          
+          if (statusData.status === 'completed') {
+            recordingFlow.setAnalysisResults(statusData.results);
+            recordingFlow.setFlowState("results_ready");
+            recordingFlow.setIsAnalyzingBackend(false);
+          } else if (statusData.status === 'error') {
+            throw new Error(statusData.message || 'Analysis failed');
+          } else {
+            // Still processing - keep polling
+            console.log(`Poll ${pollCount}: ${statusData.status} - ${statusData.message || 'Processing...'}`);
+            setTimeout(pollResults, 2000);
+          }
+        } catch (pollError) {
+          console.error('Polling error:', pollError);
+          throw pollError;
         }
       };
       
@@ -115,9 +136,7 @@ export default function Home() {
       
     } catch (error) {
       console.error('Analysis fetch error:', error);
-      recordingFlow.setErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : String(error)}`);
-      recordingFlow.setFlowState("ready_to_start");
-    } finally {
+      recordingFlow.setErrorMessage(`Analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       recordingFlow.setIsAnalyzingBackend(false);
     }
   }, [recordingFlow, settings]);

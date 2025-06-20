@@ -47,7 +47,7 @@ def get_detector():
             _detector = Detector(
                 face_model="retinaface",
                 landmark_model="mobilefacenet", 
-                au_model="rf",
+                au_model="svm",
                 emotion_model="resmasknet",
                 facepose_model="img2pose"
             )
@@ -108,17 +108,35 @@ def analyze_emotions(results_df: pd.DataFrame) -> Dict[str, Any]:
     if not emotion_columns:
         return {}
     
-    emotion_summary = {}
+    # Generate statistics
+    statistics = {}
     for col in emotion_columns:
         emotion_name = col.lower().replace('_', ' ')
-        emotion_summary[emotion_name] = {
+        statistics[emotion_name] = {
             "mean": float(results_df[col].mean()),
             "max": float(results_df[col].max()),
             "std": float(results_df[col].std()),
             "dominant_frames": int((results_df[col] > 0.5).sum())
         }
     
-    return emotion_summary
+    # Generate timeline data
+    timeline = {}
+    if 'frame' in results_df.columns:
+        # Use frame numbers as timestamps (convert to seconds if FPS known)
+        timeline['timestamps'] = [float(i) for i in range(len(results_df))]
+    else:
+        # Use index as timestamps
+        timeline['timestamps'] = [float(i) for i in range(len(results_df))]
+    
+    # Add emotion arrays for timeline
+    for col in emotion_columns:
+        emotion_name = col.lower().replace('_', ' ')
+        timeline[emotion_name] = [float(val) for val in results_df[col].tolist()]
+    
+    return {
+        "statistics": statistics,
+        "timeline": timeline
+    }
 
 def analyze_action_units(results_df: pd.DataFrame) -> Dict[str, Any]:
     """Analyze action units from results"""
@@ -130,15 +148,17 @@ def analyze_action_units(results_df: pd.DataFrame) -> Dict[str, Any]:
     if not au_columns:
         return {}
     
-    au_summary = {}
+    statistics = {}
     for col in au_columns:
-        au_summary[col] = {
+        statistics[col] = {
             "mean": float(results_df[col].mean()),
             "max": float(results_df[col].max()),
             "activation_rate": float((results_df[col] > 0.5).mean())
         }
     
-    return au_summary
+    return {
+        "statistics": statistics
+    }
 
 def extract_emotional_key_moments(video_path: str, results_df: pd.DataFrame, 
                                  video_fps: float, threshold: float = 0.3) -> list:
@@ -154,21 +174,59 @@ def extract_emotional_key_moments(video_path: str, results_df: pd.DataFrame,
     
     key_moments = []
     
+    # Open video to extract frames
+    cap = cv2.VideoCapture(video_path)
+    
     for col in emotion_columns:
         high_emotion_frames = results_df[results_df[col] > threshold]
         
         for idx, row in high_emotion_frames.iterrows():
             timestamp = idx / video_fps if video_fps > 0 else idx
+            emotion_name = col.lower().replace('_', ' ')
+            
+            # Extract face frame at this moment
+            face_frame_b64 = extract_frame_as_base64(cap, int(idx))
+            
             key_moments.append({
                 "timestamp": float(timestamp),
-                "emotion": col.lower(),
+                "reason": f"High {emotion_name} detected (intensity: {row[col]:.2f})",
+                "type": "emotion_spike",
+                "frameNumber": int(idx),
+                "emotion": emotion_name,
                 "intensity": float(row[col]),
-                "frame": int(idx)
+                "faceFrame": face_frame_b64
             })
+    
+    cap.release()
     
     # Sort by intensity and return top moments
     key_moments.sort(key=lambda x: x["intensity"], reverse=True)
     return key_moments[:10]  # Return top 10 moments
+
+def extract_frame_as_base64(cap: cv2.VideoCapture, frame_number: int) -> str:
+    """Extract a frame from video and return as base64 encoded image"""
+    import base64
+    
+    try:
+        # Set the frame position
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+        ret, frame = cap.read()
+        
+        if not ret or frame is None:
+            return None
+        
+        # Encode frame as JPEG
+        success, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not success:
+            return None
+        
+        # Convert to base64
+        frame_b64 = base64.b64encode(buffer).decode('utf-8')
+        return f"data:image/jpeg;base64,{frame_b64}"
+        
+    except Exception as e:
+        logger.error(f"Failed to extract frame {frame_number}: {e}")
+        return None
 
 def calculate_summary_metrics(results_df: pd.DataFrame, config: AnalysisConfig, 
                             video_path: str, video_fps: float) -> Dict[str, Any]:

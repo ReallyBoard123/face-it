@@ -19,6 +19,7 @@ interface KeyMomentsDisplayProps {
 }
 
 const getIconForReason = (reason: string, type: string) => {
+  if (!reason) return <AlertCircle className="h-6 w-6 text-black" />;
   const lowerReason = reason.toLowerCase();
   if (type === 'game_event') {
     if (lowerReason.includes('level')) return <Zap className="h-6 w-6 text-black" />;
@@ -34,6 +35,8 @@ const getIconForReason = (reason: string, type: string) => {
 };
 
 const getCardVariantForType = (type: string, reason: string) => {
+  if (!reason) return 'blue'; // default variant for undefined reason
+  
   if (type === 'game_event') {
     if (reason.toLowerCase().includes('level')) return 'orange';
     if (reason.toLowerCase().includes('score')) return 'purple';

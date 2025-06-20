@@ -265,17 +265,74 @@ async def reset_session(session_id: str):
         "message": "Session reset successfully"
     }
 
+@app.post("/server/ping")
+async def ping_server():
+    """Ping server to check if it's running and detector is ready"""
+    redis_status = redis_manager.ping()
+    celery_status = celery_app.control.ping()
+    
+    detector_ready = redis_status and bool(celery_status)
+    
+    return {
+        "status": "running" if detector_ready else "starting",
+        "server_running": True,
+        "detector_ready": detector_ready,
+        "timestamp": datetime.now().isoformat(),
+        "message": "Server is ready" if detector_ready else "Detector is initializing"
+    }
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear all cached analysis results"""
+    try:
+        entries_removed = redis_manager.clear_all_cache()
+        return {
+            "status": "success",
+            "message": "Cache cleared successfully",
+            "entries_removed": entries_removed,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to clear cache: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear cache")
+
+@app.get("/cache/status")
+async def get_cache_status():
+    """Get current cache status"""
+    try:
+        cache_info = redis_manager.get_cache_info()
+        return {
+            "cache_size": cache_info.get("size", 0),
+            "cache_entries": cache_info.get("entries", []),
+            "timestamps": cache_info.get("timestamps", {}),
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Failed to get cache status: {e}")
+        return {
+            "cache_size": 0,
+            "cache_entries": [],
+            "timestamps": {},
+            "timestamp": datetime.now().isoformat()
+        }
+
 @app.get("/metrics")
 async def get_metrics():
     """Get system metrics"""
-    import psutil
+    try:
+        import psutil
+        memory_usage = psutil.virtual_memory().percent
+        cpu_usage = psutil.cpu_percent()
+    except ImportError:
+        memory_usage = 0
+        cpu_usage = 0
     
     return {
         "active_sessions": len(session_manager.sessions),
         "processing_sessions": len([s for s in session_manager.sessions.values() if s["status"] == "processing"]),
         "queue_length": redis_manager.get_queue_length(),
-        "memory_usage": psutil.virtual_memory().percent,
-        "cpu_usage": psutil.cpu_percent(),
+        "memory_usage": memory_usage,
+        "cpu_usage": cpu_usage,
         "timestamp": datetime.now().isoformat()
     }
 

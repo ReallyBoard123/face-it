@@ -133,6 +133,49 @@ class RedisManager:
                 logger.info(f"Cleared cache for session {session_id}")
         except Exception as e:
             logger.error(f"Cache clear error: {e}")
+    
+    def clear_all_cache(self) -> int:
+        """Clear all cached results"""
+        if not self.redis_client:
+            return 0
+        
+        try:
+            pattern = "session:*"
+            keys = self.redis_client.keys(pattern)
+            if keys:
+                self.redis_client.delete(*keys)
+                logger.info(f"Cleared all cache ({len(keys)} entries)")
+                return len(keys)
+        except Exception as e:
+            logger.error(f"Cache clear error: {e}")
+        
+        return 0
+    
+    def get_cache_info(self) -> dict:
+        """Get cache information"""
+        if not self.redis_client:
+            return {"size": 0, "entries": [], "timestamps": {}}
+        
+        try:
+            pattern = "session:*"
+            keys = self.redis_client.keys(pattern)
+            timestamps = {}
+            
+            for key in keys:
+                try:
+                    ttl = self.redis_client.ttl(key)
+                    timestamps[key] = f"TTL: {ttl}s" if ttl > 0 else "No expiry"
+                except:
+                    timestamps[key] = "Unknown"
+            
+            return {
+                "size": len(keys),
+                "entries": keys,
+                "timestamps": timestamps
+            }
+        except Exception as e:
+            logger.error(f"Cache info error: {e}")
+            return {"size": 0, "entries": [], "timestamps": {}}
 
 def get_video_hash(video_data: bytes) -> str:
     """Generate hash for video data"""
