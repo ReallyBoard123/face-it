@@ -8,7 +8,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, W
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from utils import SessionManager, RedisManager, get_video_hash, validate_video_file
+from utils import SessionManager, RedisManager, get_video_hash
 from facial_expression_analyzer import analyze_video_task
 from celery_app import celery_app
 
@@ -136,13 +136,6 @@ async def start_analysis(
     
     # Read and hash video
     file_content = await file.read()
-    
-    # Validate file size and type
-    file_size = len(file_content)
-    is_valid, validation_message = validate_video_file(file.filename or "video.webm", file.content_type or "video/webm", file_size)
-    if not is_valid:
-        raise HTTPException(status_code=413, detail=validation_message)
-    
     video_hash = get_video_hash(file_content)
     
     # Check cache first

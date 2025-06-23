@@ -60,12 +60,7 @@ export function useAnalysisProgress() {
       fileSize: fileSizeStr
     });
 
-    // Dismiss any existing toast
-    if (toastIdRef.current) {
-      toast.dismiss(toastIdRef.current);
-    }
-
-    toastIdRef.current = toast.uploadStarted(fileSizeStr);
+    // No toast for upload start - keep quiet
   }, [formatFileSize]);
 
   const updateUploadProgress = useCallback((progress: number) => {
@@ -80,6 +75,7 @@ export function useAnalysisProgress() {
         uploadSpeed: speed
       }));
     }
+    // No toast updates for upload progress - keep quiet
   }, [formatFileSize]);
 
   const startAnalysis = useCallback((sessionId: string, jobId: string) => {
@@ -91,11 +87,8 @@ export function useAnalysisProgress() {
       message: 'Queued for GPU processing...'
     });
 
-    // Update toast to analysis mode
-    if (toastIdRef.current) {
-      toast.dismiss(toastIdRef.current);
-    }
-    toastIdRef.current = toast.analysisProgress(0, 'Initializing GPU analysis...');
+    // Show toast only when analysis actually starts
+    toast.info('ANALYSIS STARTED', 'Video frames received, starting GPU processing...');
   }, []);
 
   const updateAnalysisProgress = useCallback((progress: number, message: string, framesProcessed?: number, totalFrames?: number) => {
@@ -116,11 +109,7 @@ export function useAnalysisProgress() {
       totalFrames
     }));
 
-    // Update toast
-    if (toastIdRef.current) {
-      toast.dismiss(toastIdRef.current);
-    }
-    toastIdRef.current = toast.analysisProgress(progress, enhancedMessage, eta);
+    // No toast updates during progress - keep quiet, let UI show progress
   }, [calculateETA]);
 
   const completeAnalysis = useCallback(() => {
@@ -167,6 +156,8 @@ export function useAnalysisProgress() {
     
     startTimeRef.current = undefined;
     uploadStartRef.current = undefined;
+    
+    // No toast for reset - will be handled by serverReady
   }, []);
 
   const showServerReady = useCallback(() => {

@@ -75,14 +75,10 @@ export default function Home() {
       analysisProgress.updateUploadProgress(30);
       const formData = new FormData();
       
-      // Create a new blob with video/mp4 MIME type to match backend expectations
-      const mp4VideoBlob = new Blob([videoBlob], { type: 'video/mp4' });
-      formData.append('file', mp4VideoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.mp4' : 'gameplay-recording.mp4');
+      formData.append('file', videoBlob, recordingFlow.selectedGame === 'website_browse' ? 'website-browsing-recording.webm' : 'gameplay-recording.webm');
       
       if (recordingFlow.recordedScreenBlob) {
-        // Also convert screen recording to mp4 MIME type
-        const mp4ScreenBlob = new Blob([recordingFlow.recordedScreenBlob], { type: 'video/mp4' });
-        formData.append('screen_file', mp4ScreenBlob, 'screen-recording.mp4');
+        formData.append('screen_file', recordingFlow.recordedScreenBlob, 'screen-recording.webm');
       }
       
       formData.append('session_id', session_id);
@@ -229,6 +225,7 @@ export default function Home() {
       try {
         await backendService.healthCheck();
         console.log('Initial server health check completed');
+        toast.success('SERVER ONLINE', 'Backend is ready for analysis');
       } catch (error) {
         console.warn('Initial server health check failed:', error);
         toast.warning('BACKEND UNAVAILABLE', 'Server may not be running. Some features may be limited.');
